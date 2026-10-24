@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import Processing from './pages/Processing'
 import LessonTree from './pages/LessonTree'
 import Practice from './pages/Practice'
+import ProgressPage from './pages/Progress'
 import { useApi, type Routine } from './api'
 
 type View = { name: 'home' } | { name: 'routine'; id: string } | { name: 'camera' }
@@ -41,6 +42,8 @@ function RoutineView({ id }: { id: string }) {
   const api = useApi()
   const [routine, setRoutine] = useState<Routine | null>(null)
   const [practising, setPractising] = useState<number | null>(null)
+  const [showProgress, setShowProgress] = useState(false)
+  const [reload, setReload] = useState(0)
   useEffect(() => {
     let stop = false
     let timer = 0
@@ -59,7 +62,7 @@ function RoutineView({ id }: { id: string }) {
       stop = true
       clearTimeout(timer)
     }
-  }, [api, id])
+  }, [api, id, reload])
   if (!routine) return <p className="notice">Loading…</p>
   if (routine.status !== 'ready') return <Processing routine={routine} />
   const steps = routine.lesson_plan.steps ?? []
@@ -75,5 +78,6 @@ function RoutineView({ id }: { id: string }) {
       />
     )
   }
-  return <LessonTree routine={routine} practise={setPractising} />
+  if (showProgress) return <ProgressPage routine={routine} back={() => setShowProgress(false)} />
+  return <LessonTree routine={routine} practise={setPractising} showProgress={() => setShowProgress(true)} replanned={() => setReload((n) => n + 1)} />
 }

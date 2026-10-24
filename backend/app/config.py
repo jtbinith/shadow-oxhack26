@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     database_url: str = ""
     gemini_api_key: str = ""
-    gemini_model_fast: str = "gemini-3.8-flash"
+    gemini_model_fast: str = "gemini-3.5-flash-lite"
     gemini_model_strong: str = "gemini-4-argon"
     # Coach voice: Kokoro-82M (open source, runs on CPU in the same container).
     tts_backend: str = "kokoro"

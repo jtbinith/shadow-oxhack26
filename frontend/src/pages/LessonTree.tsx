@@ -16,9 +16,26 @@ function label(step: Step) {
 
 // A Duolingo-style path: a step unlocks when the one before it has been passed at any speed;
 // bronze / silver / gold = passed at 0.5× / 0.75× / 1×.
-export default function LessonTree({ routine, practise }: { routine: Routine; practise: (index: number) => void }) {
+export default function LessonTree({ routine, practise, showProgress, replanned }: {
+  routine: Routine
+  practise: (index: number) => void
+  showProgress: () => void
+  replanned: () => void
+}) {
   const api = useApi()
   const [progress, setProgress] = useState<Progress | null>(null)
+  const [request, setRequest] = useState('')
+  const [replanning, setReplanning] = useState(false)
+  const replan = async () => {
+    setReplanning(true)
+    try {
+      await api(`/api/routines/${routine.id}/replan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request }) })
+      setRequest('')
+      replanned()
+    } finally {
+      setReplanning(false)
+    }
+  }
   useEffect(() => {
     api<Progress>(`/api/routines/${routine.id}/progress`).then(setProgress).catch(() => setProgress(null))
   }, [api, routine.id])
@@ -34,6 +51,19 @@ export default function LessonTree({ routine, practise }: { routine: Routine; pr
           {routine.lesson_plan.source === 'gemini' ? ' · plan by Gemini' : ''}
         </p>
         {routine.lesson_plan.summary && <p>{routine.lesson_plan.summary}</p>}
+        <div className="tree-actions">
+          <button className="link" onClick={showProgress}>See progress →</button>
+          <form
+            className="replan"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (request.trim().length >= 3) void replan()
+            }}
+          >
+            <input placeholder='Tell the coach, e.g. "I have two weeks" or "I keep messing up the turn"' value={request} onChange={(e) => setRequest(e.target.value)} maxLength={300} />
+            <button className="primary" disabled={replanning || request.trim().length < 3}>{replanning ? 'Re-planning…' : 'Re-plan'}</button>
+          </form>
+        </div>
       </header>
       <ol className="path">
         {steps.map((s, i) => {

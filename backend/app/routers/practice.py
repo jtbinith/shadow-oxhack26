@@ -102,3 +102,69 @@ def progress(routine_id: str, user_id: str = User) -> dict:
         unlocked = i == 0 or best.get(i - 1) is not None
         steps.append({"index": i, "best_speed": best.get(i), "unlocked": unlocked})
     return {"steps": steps, "mastery": mastery}
+
+
+@router.get("/stats")
+def stats(routine_id: str, user_id: str = User) -> dict:
+    """Everything the progress page shows, from the rep time series."""
+    with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
+        _owned(c, routine_id, user_id)
+        totals = c.execute(
+            """SELECT count(*) AS reps, count(*) FILTER (WHERE passed) AS passes, round(avg(similarity)) AS avg_score,
+                      max(similarity) AS best_score, round(avg(timing_bias_ms)) AS timing_bias_ms,
+                      round(extract(epoch FROM max(time) - min(time)) / 60) AS minutes
+               FROM rep_scores WHERE user_id=%s AND routine_id=%s""", (user_id, routine_id)).fetchone()
+        daily = c.execute(
+            """SELECT time_bucket('1 day', time) AS day, round(avg(similarity)) AS avg_score, max(similarity) AS best_score, count(*) AS reps
+               FROM rep_scores WHERE user_id=%s AND routine_id=%s GROUP BY day ORDER BY day""", (user_id, routine_id)).fetchall()
+        recent = c.execute(
+            """SELECT time, step_index, speed, drill, similarity, passed FROM rep_scores
+               WHERE user_id=%s AND routine_id=%s ORDER BY time DESC LIMIT 30""", (user_id, routine_id)).fetchall()
+        # Reps it took to first pass each step.
+        to_learn = c.execute(
+            """SELECT step_index, count(*) FILTER (WHERE time <= coalesce(first_pass, 'infinity')) AS reps, first_pass IS NOT NULL AS learnt
+               FROM (SELECT step_index, time, min(time) FILTER (WHERE passed) OVER (PARTITION BY step_index) AS first_pass
+                     FROM rep_scores WHERE user_id=%s AND routine_id=%s) t GROUP BY step_index, first_pass ORDER BY step_index""",
+            (user_id, routine_id)).fetchall()
+        habits = c.execute(
+            """SELECT top_fault->>'type' AS type, top_fault->>'body_part' AS body_part, count(*) AS times
+               FROM rep_scores WHERE user_id=%s AND routine_id=%s AND top_fault IS NOT NULL
+               GROUP BY 1, 2 ORDER BY times DESC LIMIT 5""", (user_id, routine_id)).fetchall()
+        mastery = c.execute(
+            "SELECT idx, round(rating) AS rating, reps, passes, best_speed, due_at FROM ec_mastery WHERE user_id=%s AND routine_id=%s ORDER BY idx",
+            (user_id, routine_id)).fetchall()
+        days = c.execute("SELECT DISTINCT time_bucket('1 day', time) AS d FROM rep_scores WHERE user_id=%s ORDER BY d DESC", (user_id,)).fetchall()
+    # Streak: consecutive days with practice, counting back from today or yesterday.
+    import datetime as dt
+    streak, day = 0, dt.datetime.now(dt.timezone.utc).date()
+    practised = {d["d"].date() for d in days}
+    if day not in practised:
+        day -= dt.timedelta(days=1)
+    while day in practised:
+        streak += 1
+        day -= dt.timedelta(days=1)
+    xp = int((totals["reps"] or 0) * 10 + (totals["passes"] or 0) * 25)
+    return {"totals": totals, "daily": daily, "recent": recent, "reps_to_learn": to_learn, "habits": habits, "mastery": mastery, "streak": streak, "xp": xp}
+
+
+class ReplanIn(BaseModel):
+    request: str = Field(min_length=3, max_length=300)
+
+
+@router.post("/replan")
+def replan(routine_id: str, body: ReplanIn, user_id: str = User) -> dict:
+    """The learner asks for a different plan in their own words ("I have two weeks", "I keep messing up the turn")."""
+    from ..agent import plan as lesson_plan
+
+    with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
+        _owned(c, routine_id, user_id)
+        tempo = c.execute("SELECT tempo_bpm FROM routines WHERE id=%s", (routine_id,)).fetchone()["tempo_bpm"] or 100
+        ecs = c.execute("SELECT idx AS index, repeat_of, difficulty, key_moments FROM eight_counts WHERE routine_id=%s ORDER BY idx", (routine_id,)).fetchall()
+    for e in ecs:
+        e["visible"] = 1.0
+        e["difficulty"] = e["difficulty"] or 0.5
+    new_plan, source = lesson_plan.build(ecs, tempo, user_id, body.request)
+    saved = new_plan.model_dump() | {"source": source, "request": body.request}
+    with _pool().connection() as c:
+        c.execute("UPDATE routines SET lesson_plan = %s WHERE id = %s", (json.dumps(saved), routine_id))
+    return saved
