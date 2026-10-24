@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FilesetResolver, HandLandmarker, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision'
 import { PersonTracker } from './tracker'
 import { SmootherBank } from './smoothing'
+import { clothingHistogram } from './appearance'
 
 export type Landmark = NormalizedLandmark
 export type Hand = { side: string; points: Landmark[] }
@@ -82,6 +83,11 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
     // Fingers move fast; a higher beta keeps them responsive.
     const handSmooth = new SmootherBank(1.5, 0.15)
     let lastVideoTime = -1
+    // A small copy of each frame for sampling clothing colours (cheap to read).
+    const sample = document.createElement('canvas')
+    sample.width = 192
+    sample.height = 108
+    const sampleCtx = sample.getContext('2d', { willReadFrequently: true })!
     let stream: MediaStream | undefined
     let raf = 0
     let cancelled = false
@@ -126,7 +132,10 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const body = landmarker.detectForVideo(v, now)
             const hand = hands.detectForVideo(v, now)
             ctx.clearRect(0, 0, v.videoWidth, v.videoHeight)
-            const ids = tracker.update(body.landmarks, now)
+            sampleCtx.drawImage(v, 0, 0, sample.width, sample.height)
+            const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height)
+            const hists = body.landmarks.map((b) => clothingHistogram(pixels, b))
+            const ids = tracker.update(body.landmarks, hists, now)
             const people = assignHands(
               body.landmarks,
               ids,

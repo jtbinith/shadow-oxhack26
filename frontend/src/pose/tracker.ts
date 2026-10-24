@@ -1,17 +1,25 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision'
+import { blend, similarity } from './appearance'
 
 // Keeps a stable ID per person across frames, so colours (and later, scoring)
-// stay locked to the same dancer.
+// stay locked to the same dancer. Matches on position, size and clothing colour,
+// and recognises people who leave and come back.
 
 const L_SHOULDER = 11
 const R_SHOULDER = 12
 const L_HIP = 23
 const R_HIP = 24
 
-// How long a person keeps their ID after they stop being detected.
+// Keep an active ID this long after the person stops being detected.
 const KEEP_MS = 1000
-// A match must be within this many torso-lengths of the predicted position.
-const MAX_MATCH = 1.2
+// Remember a departed person's clothing for this long, to give them their ID back.
+const REMEMBER_MS = 10000
+// Matching cost limit: torso-lengths of distance + size change + colour difference.
+const MAX_MATCH = 1.6
+// How much clothing colour weighs against position.
+const COLOUR_WEIGHT = 1.5
+// Colour similarity needed to re-identify someone who came back.
+const REID_SIMILARITY = 0.8
 
 type Track = {
   id: number
@@ -21,7 +29,10 @@ type Track = {
   vy: number
   size: number
   lastSeen: number
+  hist: Float32Array | null
 }
+
+type Detection = { cx: number; cy: number; size: number; hist: Float32Array | null }
 
 function torso(body: NormalizedLandmark[]) {
   const sx = (body[L_SHOULDER].x + body[R_SHOULDER].x) / 2
@@ -36,23 +47,30 @@ function torso(body: NormalizedLandmark[]) {
 }
 
 export class PersonTracker {
-  private tracks: Track[] = []
-  private nextId = 0
+  private active: Track[] = []
+  private departed: Track[] = []
   private maxPeople: number
 
   constructor(maxPeople: number) {
     this.maxPeople = maxPeople
   }
 
-  /** Returns one stable ID per body, in the same order as `bodies`. */
-  update(bodies: NormalizedLandmark[][], now: number): number[] {
-    this.tracks = this.tracks.filter((t) => now - t.lastSeen < KEEP_MS)
-    const dets = bodies.map(torso)
+  /**
+   * Returns one stable ID per body, in the same order as `bodies`.
+   * `hists` holds each body's clothing histogram (null when it couldn't be sampled).
+   */
+  update(bodies: NormalizedLandmark[][], hists: (Float32Array | null)[], now: number): number[] {
+    // Move tracks that have been missing too long into the "departed" memory.
+    for (const t of this.active) if (now - t.lastSeen >= KEEP_MS && t.hist) this.departed.push(t)
+    this.active = this.active.filter((t) => now - t.lastSeen < KEEP_MS)
+    this.departed = this.departed.filter((t) => now - t.lastSeen < REMEMBER_MS)
 
-    // Score every (track, detection) pair by distance from the track's predicted position,
-    // measured in torso lengths, plus a penalty for a change in apparent size.
+    const dets: Detection[] = bodies.map((b, i) => ({ ...torso(b), hist: hists[i] }))
+    const ids: number[] = new Array(bodies.length).fill(-1)
+
+    // 1. Match detections to active tracks, cheapest pair first.
     const pairs: { t: number; d: number; cost: number }[] = []
-    this.tracks.forEach((tr, t) => {
+    this.active.forEach((tr, t) => {
       const dt = Math.min((now - tr.lastSeen) / 1000, 0.5)
       const px = tr.cx + tr.vx * dt
       const py = tr.cy + tr.vy * dt
@@ -60,37 +78,57 @@ export class PersonTracker {
         const scale = (tr.size + det.size) / 2
         const dist = Math.hypot(det.cx - px, det.cy - py) / scale
         const sizeChange = Math.abs(Math.log(det.size / tr.size))
-        const cost = dist + sizeChange
+        const colour = tr.hist && det.hist ? 1 - similarity(tr.hist, det.hist) : 0
+        const cost = dist + sizeChange + COLOUR_WEIGHT * colour
         if (cost < MAX_MATCH) pairs.push({ t, d, cost })
       })
     })
-
-    // Greedy assignment, cheapest first (fine for a handful of people).
     pairs.sort((a, b) => a.cost - b.cost)
-    const ids: number[] = new Array(bodies.length).fill(-1)
     const usedTracks = new Set<number>()
     for (const { t, d } of pairs) {
       if (usedTracks.has(t) || ids[d] !== -1) continue
       usedTracks.add(t)
-      ids[d] = this.tracks[t].id
-      this.move(this.tracks[t], dets[d], now)
+      ids[d] = this.active[t].id
+      this.move(this.active[t], dets[d], now)
     }
 
-    // New people get the lowest free ID, so colours are reused predictably.
+    // 2. Unmatched detections: someone who left and came back, or someone new.
     for (let d = 0; d < bodies.length; d++) {
       if (ids[d] !== -1) continue
-      const taken = new Set(this.tracks.map((t) => t.id))
-      let id = 0
-      while (taken.has(id)) id++
-      if (id >= this.maxPeople) id = this.nextId++ % this.maxPeople
       const det = dets[d]
-      this.tracks.push({ id, ...det, vx: 0, vy: 0, lastSeen: now })
+      const taken = new Set(this.active.map((t) => t.id))
+      let id = this.reidentify(det, taken)
+      if (id === -1) {
+        id = 0
+        while (taken.has(id) && id < this.maxPeople) id++
+        if (id >= this.maxPeople) continue // more people than we track; skip this one
+        // This ID now belongs to someone new; forget the departed person who had it.
+        this.departed = this.departed.filter((t) => t.id !== id)
+      }
+      this.active.push({ id, ...det, vx: 0, vy: 0, lastSeen: now })
       ids[d] = id
     }
     return ids
   }
 
-  private move(tr: Track, det: { cx: number; cy: number; size: number }, now: number) {
+  private reidentify(det: Detection, taken: Set<number>): number {
+    if (!det.hist) return -1
+    let best: Track | null = null
+    let bestSim = REID_SIMILARITY
+    for (const t of this.departed) {
+      if (taken.has(t.id) || !t.hist) continue
+      const sim = similarity(t.hist, det.hist)
+      if (sim > bestSim) {
+        bestSim = sim
+        best = t
+      }
+    }
+    if (!best) return -1
+    this.departed = this.departed.filter((t) => t !== best)
+    return best.id
+  }
+
+  private move(tr: Track, det: Detection, now: number) {
     const dt = Math.max((now - tr.lastSeen) / 1000, 1 / 120)
     // Smoothed velocity, so one noisy frame doesn't throw the prediction off.
     tr.vx = 0.7 * tr.vx + 0.3 * ((det.cx - tr.cx) / dt)
@@ -98,6 +136,7 @@ export class PersonTracker {
     tr.cx = det.cx
     tr.cy = det.cy
     tr.size = 0.8 * tr.size + 0.2 * det.size
+    if (det.hist) tr.hist = tr.hist ? blend(tr.hist, det.hist) : det.hist
     tr.lastSeen = now
   }
 }
