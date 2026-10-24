@@ -115,6 +115,20 @@ const HAND_MODEL =
 
 type Connection = { start: number; end: number }
 
+// The pose model sometimes "finds" a person in furniture or a blurry shape. A real person
+// has both shoulders and at least three of: nose, elbows, hips, with a sensible shoulder width.
+function isPlausibleBody(b: Landmark[]): boolean {
+  const seen = (i: number) => (b[i]?.visibility ?? 0) >= 0.5
+  if (!seen(11) || !seen(12)) return false
+  const others = [0, 13, 14, 23, 24].filter(seen).length
+  const shoulders = Math.hypot(b[11].x - b[12].x, b[11].y - b[12].y)
+  return others >= 3 && shoulders > 0.02 && shoulders < 0.9
+}
+
+function visibleCount(b: Landmark[]): number {
+  return b.filter((p) => (p.visibility ?? 0) > 0).length
+}
+
 // Draw only points the model is confident about (or recently was), so nothing jumps around.
 function drawSkeleton(ctx: CanvasRenderingContext2D, pts: Landmark[], links: Connection[], colour: string, width: number, radius: number) {
   const w = ctx.canvas.width
@@ -284,7 +298,13 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             if (lastFrameAt) fps = 0.9 * fps + 0.1 * (1000 / (now - lastFrameAt))
             lastFrameAt = now
             let t0 = performance.now()
-            const body = landmarker.detectForVideo(v, now)
+            const raw = landmarker.detectForVideo(v, now)
+            // Throw away "people" that are really furniture or blur.
+            const realIdx = raw.landmarks.map((b, i) => (isPlausibleBody(b) ? i : -1)).filter((i) => i >= 0)
+            const body = {
+              landmarks: realIdx.map((i) => raw.landmarks[i]),
+              worldLandmarks: realIdx.map((i) => raw.worldLandmarks[i]),
+            }
             poseMs = 0.9 * poseMs + 0.1 * (performance.now() - t0)
             // When the frame rate drops, run the hand model every other frame.
             const runHands = fps >= 27 || frameNo % 2 === 0 || !lastHands
@@ -330,7 +350,11 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const d = dancer.current
             if (d.id !== null && people.some((p) => p.id === d.id)) d.lastSeen = now
             else if (d.id === null || now - d.lastSeen > DANCER_TIMEOUT_MS) {
-              const main = tracker.people().sort((a, b) => b.size - a.size)[0]
+              // The biggest person with a reasonably complete skeleton (not someone half out of frame).
+              const sizes = new Map(tracker.people().map((p) => [p.id, p.size]))
+              const main = people
+                .filter((p) => visibleCount(p.body) >= 20)
+                .sort((a, b) => (sizes.get(b.id) ?? 0) - (sizes.get(a.id) ?? 0))[0]
               if (main) dancer.current = { id: main.id, lastSeen: now }
             }
 
