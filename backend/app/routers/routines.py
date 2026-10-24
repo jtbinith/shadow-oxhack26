@@ -75,8 +75,7 @@ def my_usage(user_id: str = User) -> dict:
 
 @router.get("/routines")
 def list_routines(user_id: str = User) -> list[dict]:
-    with _pool().connection() as c:
-        c.row_factory = dict_row
+    with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
         rows = c.execute(
             "SELECT id, title, status, tempo_bpm, created_at FROM routines WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
             (user_id,),
@@ -86,8 +85,7 @@ def list_routines(user_id: str = User) -> list[dict]:
 
 @router.get("/routines/{routine_id}")
 def get_routine(routine_id: str, user_id: str = User) -> dict:
-    with _pool().connection() as c:
-        c.row_factory = dict_row
+    with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
         r = c.execute(
             """SELECT id, title, status, error, stages, tempo_bpm, beats, downbeats, lesson_plan, duration_s, beat_source, created_at
                FROM routines WHERE id = %s AND user_id = %s""",

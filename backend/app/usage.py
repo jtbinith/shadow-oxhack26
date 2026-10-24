@@ -19,7 +19,8 @@ def spend(kind: str, user_id: str, amount: int = 1) -> bool:
     per_user, total = LIMITS[kind]
     with db.pool.connection() as c:
         used_user, used_total = c.execute(
-            """SELECT coalesce(sum(amount) FILTER (WHERE user_id = %s), 0), coalesce(sum(amount) FILTER (WHERE user_id = '*'), 0)
+            """SELECT coalesce(sum(amount) FILTER (WHERE user_id = %s), 0) AS used_user,
+                      coalesce(sum(amount) FILTER (WHERE user_id = '*'), 0) AS used_total
                FROM usage WHERE day = current_date AND kind = %s""",
             (user_id, kind),
         ).fetchone()
