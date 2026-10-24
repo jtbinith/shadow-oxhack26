@@ -48,6 +48,12 @@ Every new camera frame goes through five steps.
   - **Linking:** motion prediction + cost-based matching + **OSNet** deep re-ID fingerprints (+ clothing colour as a fallback). This is a simplified version of **DeepSORT/StrongSORT**, the standard multi-person trackers.
 - Detections that aren't plausible people (no shoulders, a "person" found in a chair) are dropped before tracking.
 
+### Focus mode (default on)
+The pose model runs once per person, so three people made it ~3× slower. In focus mode:
+- **Most frames:** a second, single-person pose model looks only at a **crop around the dancer** (a box 1.6× their size, scaled to 512 px). It's faster, and the dancer appears bigger to the model, so their points are more precise, including further from the camera.
+- **Every 10th frame**, or whenever the dancer leaves the crop: a **full-frame scan** of everyone, which updates other people's identities. Between scans, others are drawn **dimmed** from the last scan.
+- The FPS meter shows `focus` or `full` for each frame. Turn it off with **Focus: off**.
+
 ### Step 2: The tracker decides who is who
 MediaPipe returns people in a random order each frame. Without tracking, colours jumped between people. The tracker (`tracker.ts`) gives each person a **stable ID**:
 
