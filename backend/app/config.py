@@ -19,12 +19,13 @@ class Settings(BaseSettings):
     # "local" = temp files deleted after processing (Hugging Face); "s3" = Vultr Object Storage.
     storage_backend: str = "local"
     max_upload_mb: int = 200
-    # Daily rationing of free-tier quotas (per user / whole app). Tune in .env.
-    limit_gemini_per_user: int = 30
+    # Daily rationing of free-tier quotas. While it's just us, per-user = whole-app; lower the
+    # per-user values in .env once others use the deployed app.
+    limit_gemini_per_user: int = 300
     limit_gemini_total: int = 300
-    limit_tts_chars_per_user: int = 3000
+    limit_tts_chars_per_user: int = 20000
     limit_tts_chars_total: int = 20000
-    limit_uploads_per_user: int = 5
+    limit_uploads_per_user: int = 40
     limit_uploads_total: int = 40
     static_dir: str = "/app/static"
 
