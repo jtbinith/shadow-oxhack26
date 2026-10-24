@@ -33,24 +33,39 @@ function fuseHands(person: Person): Person {
 }
 
 // Give each detected hand to the person whose wrist is closest to it.
-function assignHands(bodies: Landmark[][], ids: number[], hands: Hand[]): Person[] {
+function torsoLength(b: Landmark[]): number {
+  const sx = (b[11].x + b[12].x) / 2
+  const sy = (b[11].y + b[12].y) / 2
+  const hx = (b[23].x + b[24].x) / 2
+  const hy = (b[23].y + b[24].y) / 2
+  const shoulders = Math.hypot(b[11].x - b[12].x, b[11].y - b[12].y)
+  // When hips are off-screen, shoulder width is a steadier size estimate.
+  return Math.max(Math.hypot(sx - hx, sy - hy), shoulders, 0.02)
+}
+
+// A hand belongs to a body only if its wrist is within this many torso lengths of that body's wrist.
+const HAND_MATCH = 0.6
+
+function assignHands(bodies: Landmark[][], ids: number[], hands: Hand[]): { people: Person[]; loose: Hand[] } {
   const people: Person[] = bodies.map((body, i) => ({ id: ids[i], body, hands: [] }))
+  const loose: Hand[] = []
   for (const hand of hands) {
     const w = hand.points[0]
     let best = -1
-    let bestDist = Infinity
+    let bestScore = Infinity
     bodies.forEach((b, i) => {
       for (const j of [L_WRIST, R_WRIST]) {
-        const d = Math.hypot(b[j].x - w.x, b[j].y - w.y)
-        if (d < bestDist) {
-          bestDist = d
+        const score = Math.hypot(b[j].x - w.x, b[j].y - w.y) / torsoLength(b)
+        if (score < bestScore) {
+          bestScore = score
           best = i
         }
       }
     })
-    if (best >= 0 && bestDist < 0.15) people[best].hands.push(hand)
+    if (best >= 0 && bestScore < HAND_MATCH) people[best].hands.push(hand)
+    else loose.push(hand)
   }
-  return people
+  return { people, loose }
 }
 
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
@@ -123,8 +138,8 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
             runningMode: 'VIDEO',
             numPoses: MAX_PEOPLE,
-            minPoseDetectionConfidence: 0.5,
-            minPosePresenceConfidence: 0.5,
+            minPoseDetectionConfidence: 0.4,
+            minPosePresenceConfidence: 0.4,
             minTrackingConfidence: 0.6,
           }),
           HandLandmarker.createFromOptions(fileset, {
@@ -155,14 +170,15 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height)
             const hists = body.landmarks.map((b) => clothingHistogram(pixels, b))
             const ids = tracker.update(body.landmarks, hists, now)
-            const people = assignHands(
+            const { people: matched, loose } = assignHands(
               body.landmarks,
               ids,
               hand.landmarks.map((points, i) => ({
                 side: hand.handedness[i]?.[0]?.categoryName ?? 'Unknown',
                 points,
               })),
-            ).map((person) => ({
+            )
+            const people = matched.map((person) => ({
               id: person.id,
               body: bodySmooth.smooth(`p${person.id}`, person.body, now),
               hands: person.hands.map((h) => ({ side: h.side, points: handSmooth.smooth(`p${person.id}-${h.side}`, h.points, now) })),
@@ -174,6 +190,8 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
               drawSkeleton(ctx, person.body, PoseLandmarker.POSE_CONNECTIONS, colour, 4, 3)
               for (const h of person.hands) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, colour, 2, 2)
             }
+            // Hands whose body wasn't found (e.g. someone at the edge of the frame).
+            for (const h of loose) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, '#d9d9d9', 1.5, 1.5)
             if (people.length) onFrame?.({ people })
           }
           raf = requestAnimationFrame(loop)

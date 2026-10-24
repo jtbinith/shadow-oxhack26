@@ -69,14 +69,25 @@ function addRegion(img: ImageData, quad: Pt[], hist: Float32Array): number {
   return n
 }
 
-/** Returns a normalised histogram, or null if the torso isn't visible enough to sample. */
+/** Returns a normalised histogram, or null if not enough of the torso is visible to sample. */
 export function clothingHistogram(img: ImageData, body: NormalizedLandmark[]): Float32Array | null {
   const vis = (i: number) => (body[i]?.visibility ?? 0) >= 0.5
-  if (![L_SHOULDER, R_SHOULDER, L_HIP, R_HIP].every(vis)) return null
+  if (!vis(L_SHOULDER) || !vis(R_SHOULDER)) return null
   const hist = new Float32Array(HIST_SIZE)
-  let n = addRegion(img, [body[L_SHOULDER], body[R_SHOULDER], body[R_HIP], body[L_HIP]], hist)
-  if (vis(L_KNEE) && vis(R_KNEE)) {
-    n += addRegion(img, [body[L_HIP], body[R_HIP], body[R_KNEE], body[L_KNEE]], hist)
+  let n: number
+  if (vis(L_HIP) && vis(R_HIP)) {
+    n = addRegion(img, [body[L_SHOULDER], body[R_SHOULDER], body[R_HIP], body[L_HIP]], hist)
+    if (vis(L_KNEE) && vis(R_KNEE)) {
+      n += addRegion(img, [body[L_HIP], body[R_HIP], body[R_KNEE], body[L_KNEE]], hist)
+    }
+  } else {
+    // Hips hidden (seated, behind a desk, close to the camera): sample the upper chest instead,
+    // a box hanging below the shoulders as deep as 0.8 shoulder widths.
+    const ls = body[L_SHOULDER]
+    const rs = body[R_SHOULDER]
+    const depth = 0.8 * Math.hypot(rs.x - ls.x, rs.y - ls.y)
+    const down = (p: Pt) => ({ x: p.x, y: Math.min(1, p.y + depth) })
+    n = addRegion(img, [ls, rs, down(rs), down(ls)], hist)
   }
   if (n < 30) return null
   for (let i = 0; i < HIST_SIZE; i++) hist[i] /= n
