@@ -536,7 +536,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         <div className="feedback">
           <div className="score">
             <span className={`big ${result.similarity >= 80 ? 'pass' : ''}`}>{result.similarity}</span>
-            <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.dynamics !== null ? ` · energy ${result.dynamics}` : ''}{result.timingBiasMs ? ` · ${Math.abs(result.timingBiasMs)} ms ${result.timingBiasMs > 0 ? 'late' : 'early'}` : ''}</span>
+            <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.dynamics !== null ? ` · energy ${result.dynamics}` : ''}{result.timingBiasMs && Math.abs(result.timingBiasMs) > 60 ? ` · ${result.timingBiasMs > 0 ? 'a little late' : 'a little early'}` : ''}</span>
           </div>
           <p className="cue">“{result.cue}”</p>
           {result.notes.length > 0 && (

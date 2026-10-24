@@ -1,39 +1,36 @@
 import React from 'react';
 import {
   AbsoluteFill,
-  Easing,
   interpolate,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
+import { Gif } from '@remotion/gif';
 
 const WORD = 'SHADOW';
 const LETTER_WIDTH = 150;
-// Two panels side by side cover the whole word at the start
-const RECT_WIDTH = (WORD.length * LETTER_WIDTH) / 2;
-const RECT_HEIGHT = 280;
+// Matches public/walk.gif; wider than a letter so a walker hides the letter it is crossing
+const WALKER_WIDTH = 162;
+const WALKER_HEIGHT = 299;
 
 export const ShadowReveal: React.FC = () => {
   const frame = useCurrentFrame();
   const { width, height, durationInFrames } = useVideoConfig();
 
   const wordLeft = (width - WORD.length * LETTER_WIDTH) / 2;
+  const centerX = width / 2;
   const centerY = height / 2;
 
-  const centerX = width / 2;
-
-  // Both panels meet at the centre, then their inner edges drift apart to the screen edges
+  // Distance of each walker's centre from the screen centre. They start back to back
+  // and walk at a constant pace (easing would make the feet look like they slide).
   const sweepStart = 30;
-  const sweepEnd = durationInFrames - 45;
-  const offset = interpolate(
+  const sweepEnd = durationInFrames - 30;
+  const walkerOffset = interpolate(
     frame,
     [sweepStart, sweepEnd],
-    [0, width / 2],
-    {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-      easing: Easing.inOut(Easing.sin),
-    }
+    [WALKER_WIDTH / 2, width / 2 + WALKER_WIDTH / 2],
+    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
   return (
@@ -41,12 +38,12 @@ export const ShadowReveal: React.FC = () => {
       {WORD.split('').map((letter, i) => {
         const letterLeft = wordLeft + i * LETTER_WIDTH;
         const letterRight = letterLeft + LETTER_WIDTH;
-        // Each letter fades in as the inner edge of the panel heading its way passes over it
+        // Each letter fades in as the walker heading its way crosses it
         const [near, far] =
           letterLeft >= centerX
             ? [letterLeft - centerX, letterRight - centerX]
             : [centerX - letterRight, centerX - letterLeft];
-        const opacity = interpolate(offset, [near, far], [0, 1], {
+        const opacity = interpolate(walkerOffset, [near, far], [0, 1], {
           extrapolateLeft: 'clamp',
           extrapolateRight: 'clamp',
         });
@@ -80,18 +77,27 @@ export const ShadowReveal: React.FC = () => {
         );
       })}
 
-      {[centerX - offset - RECT_WIDTH, centerX + offset].map((left, i) => (
+      {[-1, 1].map((direction) => (
         <div
-          key={i}
+          key={direction}
           style={{
             position: 'absolute',
-            left,
-            top: centerY - RECT_HEIGHT / 2,
-            width: RECT_WIDTH,
-            height: RECT_HEIGHT,
-            backgroundColor: '#000',
+            left: centerX + direction * walkerOffset - WALKER_WIDTH / 2,
+            top: centerY - WALKER_HEIGHT / 2,
+            width: WALKER_WIDTH,
+            height: WALKER_HEIGHT,
+            // The source walks right; mirror the left-hand walker
+            transform: `scaleX(${direction})`,
           }}
-        />
+        >
+          <Gif
+            src={staticFile('walk.gif')}
+            width={WALKER_WIDTH}
+            height={WALKER_HEIGHT}
+            fit="fill"
+            loopBehavior="loop"
+          />
+        </div>
       ))}
     </AbsoluteFill>
   );

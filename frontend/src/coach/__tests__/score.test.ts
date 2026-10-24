@@ -39,7 +39,8 @@ describe('scoreRep', () => {
     const wrong = refFrames.map((_, i) => ({ t: i / 30, frame: person(60) }))
     const s = scoreRep(wrong, ref(refFrames))
     expect(s.topFault?.body_part).toMatch(/right_(fore)?arm/)
-    expect(s.cue).toMatch(/^Right (fore)?arm (higher|lower) on \d( — about \d+° off)?\.$/)
+    expect(s.cue).toMatch(/^Right (fore)?arm ((much|a touch) )?(higher|lower|out wider|in closer)( and (out wider|in closer))? on \d\.$/)
+    expect(s.cue).not.toMatch(/°|degree/)
   })
 
   it('arms-only drill ignores the legs', () => {
@@ -72,5 +73,21 @@ describe('normaliseFrame', () => {
     const f = normaliseFrame(pts, 1600, 900)!
     const width = f[12]![0] - f[11]![0]
     expect(width).toBeCloseTo((0.1 * 1600) / (0.2 * 900), 3)
+  })
+})
+
+describe('directionWords', () => {
+  it('says higher when the routine points further up', async () => {
+    const { directionWords } = await import('../score')
+    expect(directionWords(2, 0, -0.5, 40)).toBe('higher')
+  })
+  it('says out wider for a right arm that should reach further from the body (camera-left)', async () => {
+    const { directionWords } = await import('../score')
+    expect(directionWords(2, -0.5, 0, 40)).toBe('out wider')
+    expect(directionWords(0, -0.5, 0, 40)).toBe('in closer') // left arm, same screen direction = inwards
+  })
+  it('combines and qualifies', async () => {
+    const { directionWords } = await import('../score')
+    expect(directionWords(2, -0.4, -0.4, 70)).toBe('much higher and out wider')
   })
 })

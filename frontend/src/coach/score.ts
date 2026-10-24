@@ -145,6 +145,23 @@ function speedSeries(frames: Frame[], dt: number[]): number[] {
   })
 }
 
+/**
+ * Plain-language correction for a limb, relative to the dancer's own body: higher/lower and
+ * out wider / in closer (towards the midline). Facing the camera, the dancer's left side is on
+ * the camera's right, so "out" flips with the side.
+ */
+export function directionWords(bone: number, dx: number, dy: number, err: number): string {
+  const left = BONE_PART[bone].startsWith('left')
+  const outward = left ? dx > 0 : dx < 0
+  const parts: string[] = []
+  const v = Math.abs(dy)
+  const h = Math.abs(dx)
+  if (v >= 0.6 * Math.max(v, h)) parts.push(dy < 0 ? 'higher' : 'lower')
+  if (h >= 0.6 * Math.max(v, h)) parts.push(outward ? 'out wider' : 'in closer')
+  const how = err >= 60 ? 'much ' : err < 30 ? 'a touch ' : ''
+  return how + (parts.join(' and ') || 'sharper')
+}
+
 /** The single most useful thing to say, as an external-focus cue of 12 words or fewer. */
 export function cueFor(f: Fault | null): string {
   if (!f) return 'Lovely. Again!'
@@ -201,7 +218,7 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
   let shapeFault: Fault | null = null
   const overall = BONES.map(() => ({ sum: 0, n: 0 }))
   {
-    const errs = BONES.map(() => ({ sum: 0, n: 0, dy: 0 }))
+    const errs = BONES.map(() => ({ sum: 0, n: 0, dy: 0, dx: 0 }))
     for (const [i, j] of pathPairs) {
       userDirs[i].forEach((u, b) => {
         const r = refDirs[j][b]
@@ -217,6 +234,7 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
         errs[b].sum += angle(u, r)
         errs[b].n++
         errs[b].dy += r[1] - u[1] // positive: reference points further down
+        errs[b].dx += r[0] - u[0] // positive: reference points further to the camera's right
       })
     }
     let best = -1
@@ -228,7 +246,7 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
     })
     if (best >= 0 && bestErr > 20) {
       const e = errs[best]
-      shapeFault = { type: 'shape', count: worst + 1, body_part: BONE_PART[best], direction: e.dy < 0 ? 'higher' : 'lower', magnitude: Math.round(bestErr) }
+      shapeFault = { type: 'shape', count: worst + 1, body_part: BONE_PART[best], direction: directionWords(best, e.dx / e.n, e.dy / e.n, bestErr), magnitude: Math.round(bestErr) }
     }
   }
 
@@ -310,7 +328,6 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
   ]
   const topFault = candidates.filter(([, f]) => f).sort((a, b) => a[0] - b[0])[0]?.[1] ?? null
   let cue = opts.vocabulary?.(topFault) ?? cueFor(topFault)
-  if (topFault?.type === 'shape' && (topFault.magnitude ?? 0) >= 35) cue = cue.replace(/\.$/, ` — about ${topFault.magnitude}° off.`)
 
   // Detailed notes for the feedback card.
   const notes: string[] = []
@@ -320,8 +337,8 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
     .filter((x) => x.b < 8 && x.err > 18)
     .sort((a, b) => b.err - a.err)
     .slice(0, 2)
-  for (const { b, err } of limbErrs) notes.push(`Your ${name(b)} averaged ~${Math.round(err)}° off the routine's line.`)
-  if (bias !== null && Math.abs(bias) > 60) notes.push(`Timing: you hit ~${Math.abs(bias)} ms ${bias > 0 ? 'late' : 'early'} on average${timing !== null && timing >= 70 ? ', but consistently — tighten it and timing jumps' : ''}.`)
+  for (const { b, err } of limbErrs) notes.push(`Your ${name(b)} was ${err >= 45 ? 'well off' : 'a little off'} the routine's line through the rep.`)
+  if (bias !== null && Math.abs(bias) > 60) notes.push(`Timing: you're landing hits a little ${bias > 0 ? 'after' : 'before'} the beat${timing !== null && timing >= 70 ? ', but consistently — nudge it and timing jumps' : ''}.`)
   else if (timing !== null && timing >= 80) notes.push('Timing: locked in. Hits landed on the beat.')
   if (dynamics !== null && dynamics < 60) notes.push(dynFault?.type === 'stiff' ? 'Energy: you overshot the hits — same shape, less force.' : 'Energy: the routine hits harder than you did — attack the accents.')
   else if (dynamics !== null && dynamics >= 80) notes.push('Energy: your sharpness matched the routine.')
