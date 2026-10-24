@@ -80,6 +80,32 @@ const POSE_MODELS: Record<PoseQuality, string> = {
   standard: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
   high: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task',
 }
+// Focus mode: between full-frame scans, run the pose model only on a crop around the dancer.
+const FULL_SCAN_EVERY = 10
+// Others' skeletons from the last full scan stay on screen (dimmed) this long.
+const STALE_MS = 700
+
+type Box = { x: number; y: number; w: number; h: number }
+
+// A generous box around someone's visible keypoints, in video pixels, so the next frame's
+// movement stays inside it.
+function focusBox(body: Landmark[], vw: number, vh: number): Box | null {
+  const pts = body.filter((p) => (p.visibility ?? 0) > 0.3)
+  if (pts.length < 8) return null
+  const x0 = Math.min(...pts.map((p) => p.x)) * vw
+  const x1 = Math.max(...pts.map((p) => p.x)) * vw
+  const y0 = Math.min(...pts.map((p) => p.y)) * vh
+  const y1 = Math.max(...pts.map((p) => p.y)) * vh
+  const cx = (x0 + x1) / 2
+  const cy = (y0 + y1) / 2
+  // Room for arms flung out and a step to the side.
+  const side = Math.max(x1 - x0, y1 - y0) * 1.6 + 60
+  const w = Math.min(vw, side)
+  const h = Math.min(vh, side)
+  if (w * h > 0.8 * vw * vh) return null // the dancer fills the frame; a full scan is just as good
+  return { x: Math.min(Math.max(0, cx - w / 2), vw - w), y: Math.min(Math.max(0, cy - h / 2), vh - h), w, h }
+}
+
 // How often to refresh each person's OSNet fingerprint.
 const REID_EVERY_MS = 300
 // If the chosen dancer is gone this long, pick the main person in frame instead.
@@ -181,6 +207,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
   const [status, setStatus] = useState('Starting camera…')
   const [perf, setPerf] = useState('')
   const [quality, setQuality] = useState<PoseQuality>('fast')
+  const [focus, setFocus] = useState(true)
   // The person being coached. Kept across model changes; follows their identity, not their position.
   const dancer = useRef<{ id: number | null; lastSeen: number }>({ id: null, lastSeen: 0 })
   // Set by the effect so a click can pick the person under the pointer.
@@ -188,6 +215,14 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
 
   useEffect(() => {
     let landmarker: PoseLandmarker | undefined
+    // A second, single-person pose model that only ever sees the crop around the dancer.
+    let focusLm: PoseLandmarker | undefined
+    const focusCanvas = document.createElement('canvas')
+    const focusCtx = focusCanvas.getContext('2d')!
+    let dancerRaw: Landmark[] | null = null
+    let focusLost = true
+    let lastOthers: { people: Person[]; at: number } = { people: [], at: 0 }
+    let mode: 'focus' | 'full' = 'full'
     let hands: HandLandmarker | undefined
     const tracker = new PersonTracker(MAX_PEOPLE)
     // A fresh tracker means fresh IDs, so choose the dancer again.
@@ -263,7 +298,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
         video.current!.srcObject = stream
         await video.current!.play()
         const fileset = await FilesetResolver.forVisionTasks(WASM)
-        ;[landmarker, hands] = await Promise.all([
+        ;[landmarker, hands, focusLm] = await Promise.all([
           PoseLandmarker.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: POSE_MODELS[quality], delegate: 'GPU' },
             runningMode: 'VIDEO',
@@ -280,6 +315,14 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             minHandDetectionConfidence: 0.5,
             minHandPresenceConfidence: 0.5,
             minTrackingConfidence: 0.6,
+          }),
+          PoseLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: POSE_MODELS[quality], delegate: 'GPU' },
+            runningMode: 'VIDEO',
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.3,
+            minPosePresenceConfidence: 0.3,
+            minTrackingConfidence: 0.5,
           }),
         ])
         setStatus('')
@@ -298,13 +341,41 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             if (lastFrameAt) fps = 0.9 * fps + 0.1 * (1000 / (now - lastFrameAt))
             lastFrameAt = now
             let t0 = performance.now()
-            const raw = landmarker.detectForVideo(v, now)
-            // Throw away "people" that are really furniture or blur.
-            const realIdx = raw.landmarks.map((b, i) => (isPlausibleBody(b) ? i : -1)).filter((i) => i >= 0)
-            const body = {
-              landmarks: realIdx.map((i) => raw.landmarks[i]),
-              worldLandmarks: realIdx.map((i) => raw.worldLandmarks[i]),
+            // Focus mode: most frames only look at a crop around the dancer (one person, bigger in the
+            // model's input), with a full-frame scan every few frames to keep everyone else up to date.
+            let focused: { body: Landmark[]; world: Landmark[] } | null = null
+            const box = focus && dancerRaw && !focusLost && frameNo % FULL_SCAN_EVERY !== 0 ? focusBox(dancerRaw, v.videoWidth, v.videoHeight) : null
+            if (box && focusLm && dancer.current.id !== null) {
+              const scale = 512 / Math.max(box.w, box.h)
+              const cw = Math.round(box.w * scale)
+              const ch = Math.round(box.h * scale)
+              if (focusCanvas.width !== cw || focusCanvas.height !== ch) {
+                focusCanvas.width = cw
+                focusCanvas.height = ch
+              }
+              focusCtx.drawImage(v, box.x, box.y, box.w, box.h, 0, 0, cw, ch)
+              const r = focusLm.detectForVideo(focusCanvas, now)
+              const lm = r.landmarks[0]
+              if (lm && isPlausibleBody(lm)) {
+                // Back from crop coordinates to whole-frame coordinates.
+                const vw = v.videoWidth
+                const vh = v.videoHeight
+                const mapped = lm.map((p) => ({ ...p, x: (box.x + p.x * box.w) / vw, y: (box.y + p.y * box.h) / vh, z: (p.z * box.w) / vw }))
+                focused = { body: mapped, world: r.worldLandmarks[0] }
+              } else {
+                focusLost = true // dancer left the crop: scan the whole frame now
+              }
             }
+            mode = focused ? 'focus' : 'full'
+            const raw = focused ? null : landmarker.detectForVideo(v, now)
+            // Throw away "people" that are really furniture or blur.
+            const realIdx = raw ? raw.landmarks.map((b, i) => (isPlausibleBody(b) ? i : -1)).filter((i) => i >= 0) : []
+            const body = focused
+              ? { landmarks: [focused.body], worldLandmarks: [focused.world] }
+              : {
+                  landmarks: realIdx.map((i) => raw!.landmarks[i]),
+                  worldLandmarks: realIdx.map((i) => raw!.worldLandmarks[i]),
+                }
             poseMs = 0.9 * poseMs + 0.1 * (performance.now() - t0)
             // When the frame rate drops, run the hand model every other frame.
             const runHands = fps >= 27 || frameNo % 2 === 0 || !lastHands
@@ -318,7 +389,9 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             // Reading pixels back is slow, so sample clothing colours every 4th frame
             // (and whenever the number of people changes).
             let hists: (Float32Array | null)[]
-            if (frameNo % 4 === 0 || lastHists.length !== body.landmarks.length) {
+            if (focused) {
+              hists = [null]
+            } else if (frameNo % 4 === 0 || lastHists.length !== body.landmarks.length) {
               sampleCtx.drawImage(v, 0, 0, sample.width, sample.height)
               const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height)
               hists = body.landmarks.map((b) => clothingHistogram(pixels, b))
@@ -326,7 +399,21 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             } else {
               hists = body.landmarks.map(() => null)
             }
-            const ids = tracker.update(body.landmarks, hists, now)
+            let ids: number[]
+            if (focused) {
+              tracker.touch(dancer.current.id!, focused.body, now)
+              ids = [dancer.current.id!]
+            } else {
+              ids = tracker.update(body.landmarks, hists, now)
+            }
+            // Remember the dancer's latest raw skeleton, to place next frame's crop.
+            const di = ids.indexOf(dancer.current.id ?? -2)
+            if (di >= 0) {
+              dancerRaw = body.landmarks[di]
+              focusLost = false
+            } else if (!focused) {
+              focusLost = true
+            }
             // Drop duplicates / over-limit bodies before giving out hands.
             const keep = ids.map((id, i) => (id >= 0 ? i : -1)).filter((i) => i >= 0)
             const { people: matched, loose } = assignHands(
@@ -381,6 +468,13 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
               }
             }
 
+            // In focus frames only the dancer is fresh; show everyone else from the last full scan, dimmed.
+            if (!focused) lastOthers = { people: people.filter((p) => p.id !== dancer.current.id), at: now }
+            else if (now - lastOthers.at < STALE_MS) {
+              ctx.globalAlpha = 0.45
+              for (const o of lastOthers.people) drawSkeleton(ctx, o.body, PoseLandmarker.POSE_CONNECTIONS, COLOURS[o.id % COLOURS.length], 3, 2.5)
+              ctx.globalAlpha = 1
+            }
             for (const person of people) {
               const colour = COLOURS[person.id % COLOURS.length]
               const isDancer = person.id === dancer.current.id
@@ -389,11 +483,11 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
               if (isDancer) drawLabel(ctx, person.body, 'YOU', colour)
             }
             // Hands whose body wasn't found (e.g. someone at the edge of the frame).
-            for (const h of loose) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, '#d9d9d9', 1.5, 1.5)
+            if (!focused) for (const h of loose) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, '#d9d9d9', 1.5, 1.5)
             if (people.length) onFrame?.({ people, dancerId: dancer.current.id })
             if (now - lastPerfUpdate > 500) {
               lastPerfUpdate = now
-              setPerf(`${fps.toFixed(0)} fps · pose (${quality}) ${poseMs.toFixed(0)} ms · hands ${handMs.toFixed(0)} ms${runHands ? '' : ' (every 2nd frame)'} · re-id ${reidReady ? `${reidMs.toFixed(0)} ms` : 'loading'}`)
+              setPerf(`${fps.toFixed(0)} fps · ${mode} · pose (${quality}) ${poseMs.toFixed(0)} ms · hands ${handMs.toFixed(0)} ms${runHands ? '' : ' (every 2nd frame)'} · re-id ${reidReady ? `${reidMs.toFixed(0)} ms` : 'loading'}`)
             }
           }
           raf = requestAnimationFrame(loop)
@@ -409,11 +503,12 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
       cancelAnimationFrame(raf)
       stream?.getTracks().forEach((t) => t.stop())
       landmarker?.close()
+      focusLm?.close()
       hands?.close()
       reid.terminate()
       pickAt.current = null
     }
-  }, [onFrame, quality])
+  }, [onFrame, quality, focus])
 
   // The video is mirrored on screen, so flip the click's x back to camera coordinates.
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -435,6 +530,15 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
         }}
       >
         Accuracy: {quality}
+      </button>
+      <button
+        className="quality focus-toggle"
+        onClick={(e) => {
+          e.stopPropagation()
+          setFocus((f) => !f)
+        }}
+      >
+        Focus: {focus ? 'on' : 'off'}
       </button>
     </div>
   )

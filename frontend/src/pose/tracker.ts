@@ -225,6 +225,12 @@ export class PersonTracker {
     return best.id
   }
 
+  /** Focus mode: update one known person from a crop-only detection, without re-matching anyone. */
+  touch(id: number, body: NormalizedLandmark[], now: number) {
+    const tr = this.active.find((t) => t.id === id)
+    if (tr) this.move(tr, { ...torso(body), hist: null }, now, false)
+  }
+
   /** Positions of active people, for choosing or clicking on the dancer. */
   people(): { id: number; cx: number; cy: number; size: number }[] {
     return this.active.map(({ id, cx, cy, size }) => ({ id, cx, cy, size }))

@@ -30,3 +30,4 @@ h1 { margin: 0; letter-spacing: 0.02em; }
   font: 600 0.85rem system-ui, sans-serif; color: #fff; cursor: pointer;
   background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255,255,255,0.3); padding: 0.3rem 0.6rem; border-radius: 6px;
 }
+.focus-toggle { right: 10.5rem; }
