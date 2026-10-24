@@ -50,14 +50,16 @@ MediaPipe returns people in a random order each frame. Without tracking, colours
    - **change in size** (someone stepping towards the camera gets bigger gradually, not suddenly);
    - **clothing colour difference** (see step 3).
 3. It pairs them **cheapest first**. A detection with no good match is either a **returning** person or a **new** one.
-4. A person keeps their ID for **1 second** after disappearing (brief occlusion), and their clothing is **remembered for 10 seconds** so they get their ID and colour back if they return.
-5. New people take the lowest free number, so colours are predictable: **orange, pink, green, purple**.
+4. A person keeps their ID for **1.5 seconds** after disappearing (brief occlusion, camera shake), and is **remembered for 15 seconds**. If they return and their clothing matches (similarity ≥ 0.7), or they reappear near where they left within 3 seconds, they get their ID and colour back.
+5. New people take the lowest number that is neither in use nor reserved for someone who just left, so colours are predictable (**orange, pink, green, purple**) and a newcomer doesn't steal a returning person's colour.
+
+**Prediction:** the tracker predicts each person's next position from their smoothed speed and direction (a constant-velocity guess, capped at half a second ahead). It's only used to match people between frames; it doesn't predict dance moves.
 
 ### Step 3: Clothing-colour fingerprint (appearance matching)
 File: `appearance.ts`.
 
 - Each frame, a small copy of the image (192×108 pixels) is taken.
-- For each person, we sample the pixels inside their **torso** (shoulders to hips) and **upper legs** (hips to knees).
+- For each person, we sample the pixels inside their **torso** (shoulders to hips) and **upper legs** (hips to knees). If the hips are hidden (sitting behind a table, close to the camera), we sample a **chest box** below the shoulders instead.
 - Each pixel is converted to **hue, saturation and brightness** and counted into a histogram of 108 colour "buckets". This is the person's colour fingerprint.
 - Two fingerprints are compared with the **Bhattacharyya coefficient**: 1 = identical colours, 0 = nothing in common.
 - A person's stored fingerprint is **blended slowly** (10% new each frame) so it adapts to lighting changes and turning around.
@@ -76,7 +78,7 @@ Also:
 - The hand model gives every point a confidence of 0 (it has no such score), so for hands the confidence check is skipped. *That was bug #39.*
 
 ### Step 5: Fuse hands into the body
-- Each hand is attached to the person whose **wrist is closest** to it.
+- Each hand is attached to the person whose **wrist is closest** to it, but only if it's within **0.6 torso lengths** of that wrist. Hands whose body wasn't found (someone at the edge of the frame) are drawn in neutral grey instead of being given to the wrong person.
 - The pose model's body only has 3 rough points per hand. When a real hand is detected, its **precise wrist replaces the body's wrist**, and its **21 points replace the 3 rough ones**.
 - Result: one continuous skeleton per person, **33 body points + 21 per hand**, drawn in that person's colour.
 
