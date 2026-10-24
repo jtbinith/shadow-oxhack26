@@ -14,6 +14,24 @@ const COLOURS = ['#ffb347', '#ff6fb5', '#9cff6f', '#c58bff']
 const L_WRIST = 15
 const R_WRIST = 16
 
+// Body points 17–22 are the pose model's rough pinky/index/thumb; the hand model replaces them.
+const BODY_HAND_POINTS = { left: [17, 19, 21], right: [18, 20, 22] }
+
+// Join the two models into one skeleton: the hand model's wrist (more precise) becomes the
+// body's wrist, and its 21 points replace the pose model's 3 rough hand points.
+function fuseHands(person: Person): Person {
+  const body = person.body.map((p) => ({ ...p }))
+  for (const h of person.hands) {
+    const w = h.points[0]
+    const dl = Math.hypot(body[L_WRIST].x - w.x, body[L_WRIST].y - w.y)
+    const dr = Math.hypot(body[R_WRIST].x - w.x, body[R_WRIST].y - w.y)
+    const left = dl <= dr
+    body[left ? L_WRIST : R_WRIST] = { ...w, visibility: 1 }
+    for (const i of BODY_HAND_POINTS[left ? 'left' : 'right']) body[i] = { ...body[i], visibility: 0 }
+  }
+  return { ...person, body }
+}
+
 // Give each detected hand to the person whose wrist is closest to it.
 function assignHands(bodies: Landmark[][], ids: number[], hands: Hand[]): Person[] {
   const people: Person[] = bodies.map((body, i) => ({ id: ids[i], body, hands: [] }))
@@ -147,7 +165,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
               id: person.id,
               body: bodySmooth.smooth(`p${person.id}`, person.body, now),
               hands: person.hands.map((h) => ({ side: h.side, points: handSmooth.smooth(`p${person.id}-${h.side}`, h.points, now) })),
-            }))
+            })).map(fuseHands)
             bodySmooth.prune(now)
             handSmooth.prune(now)
             for (const person of people) {
