@@ -37,11 +37,12 @@ def fill_gaps(a: np.ndarray, max_gap: int = 5) -> np.ndarray:
     return out
 
 
-def normalise(image: np.ndarray) -> np.ndarray:
+def normalise(image: np.ndarray, width: int, height: int) -> np.ndarray:
     """T×33×4 (x, y, z, vis) → T×33×3 (x, y, vis): centred on the mid-hip, scaled so the
-    torso (mid-shoulder to mid-hip) is 1, lightly smoothed."""
+    torso (mid-shoulder to mid-hip) is 1, lightly smoothed. x and y are converted to pixels
+    first, so a wide video doesn't stretch the skeleton."""
     pts = fill_gaps(image)
-    xy = pts[..., :2].copy()
+    xy = pts[..., :2].copy() * np.array([width, height], dtype=np.float32)
     vis = pts[..., 3]
     if len(xy) >= 9:
         ok = ~np.isnan(xy).any(axis=(1, 2))

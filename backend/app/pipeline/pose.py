@@ -34,6 +34,8 @@ def extract(video: Path, on_progress=None) -> dict:
     )
     cap = cv2.VideoCapture(str(video))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 1
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
     image, world = [], []
     with vision.PoseLandmarker.create_from_options(opts) as lm:
@@ -54,4 +56,4 @@ def extract(video: Path, on_progress=None) -> dict:
             if on_progress and i % 30 == 0:
                 on_progress(i / total)
     cap.release()
-    return {"fps": fps, "image": np.array(image, dtype=np.float32), "world": np.array(world, dtype=np.float32)}
+    return {"fps": fps, "width": width, "height": height, "image": np.array(image, dtype=np.float32), "world": np.array(world, dtype=np.float32)}

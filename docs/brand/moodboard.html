@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
-  @font-face { font-family: "Shadow Skeleton"; src: url("fonts/ShadowSkeleton.woff2") format("woff2"), url("fonts/ShadowSkeleton.otf") format("opentype"); }
+  @font-face { font-family: "Yikes"; src: url("fonts/Yikes.woff2") format("woff2"), url("fonts/Yikes.ttf") format("truetype"); }
   :root {
     --stage: #351431;
     --curtain: #44193f;
@@ -18,7 +18,7 @@
     --miss: #ffc93c;
     --ink: #f4f1bf;
     --dim: #c9a9c2;
-    --display: "Shadow Skeleton", sans-serif;
+    --display: "Yikes", sans-serif;
     --body: "Atkinson Hyperlegible", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -46,7 +46,7 @@
   /* Hero: the wordmark is the one bold move. The cream copy lags behind, like a shadow. */
   .hero { grid-area: hero; background: transparent; padding: 20px 8px; display: flex; flex-direction: column; justify-content: center; }
   .wordmark {
-    margin: 0; font: 400 210px/0.9 var(--display); letter-spacing: 0;
+    margin: 0; font: 400 250px/0.9 var(--display); letter-spacing: 0;
     color: var(--spot); position: relative; width: max-content;
   }
   .wordmark::before {
@@ -73,8 +73,8 @@
 
   /* Type */
   .type { grid-area: type; }
-  .specimen-display { font: 400 46px/1.15 var(--display); margin: 0; }
-  .specimen-count { font: 400 46px/1 var(--display); color: var(--spot); margin: 10px 0 4px; letter-spacing: 0.04em; }
+  .specimen-display { font: 400 44px/1 var(--display); margin: 0; }
+  .specimen-count { font: 400 44px/1 var(--display); color: var(--spot); margin: 10px 0 4px; letter-spacing: 0.04em; }
   .specimen-count i { font-style: normal; color: var(--ghost); }
   .specimen-body { margin: 10px 0 0; font-size: 18px; max-width: 34ch; }
   .credit { margin: 6px 0 0; font-size: 14px; color: var(--dim); }
@@ -91,7 +91,7 @@
   .c-ok { background: var(--spot); color: var(--ink) !important; }
   .c-miss { background: var(--miss); }
   .score { display: flex; align-items: baseline; gap: 14px; }
-  .score strong { font: 400 46px/1 var(--display); color: var(--spot); }
+  .score strong { font: 400 44px/1 var(--display); color: var(--spot); }
   .score span { color: var(--dim); }
   .cue {
     margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--wing);
@@ -166,7 +166,7 @@
     <h2>Type</h2>
     <p class="specimen-display">Five, six, seven, eight</p>
     <p class="specimen-count">1 2 3 4 <i>5</i> 6 7 8</p>
-    <p class="credit">Headings: Shadow Skeleton, our own font, built from bones and joints like the pose skeleton. Body: Atkinson Hyperlegible.</p>
+    <p class="credit">Headings: Yikes! by Rick Montgomery (freeware). Body: Atkinson Hyperlegible.</p>
   </section>
 
   <section class="tile ui">

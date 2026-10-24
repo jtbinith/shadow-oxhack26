@@ -4,9 +4,10 @@ import PoseCam from './pose/PoseCam'
 import Home from './pages/Home'
 import Processing from './pages/Processing'
 import LessonTree from './pages/LessonTree'
-import { useApi, type Routine, type Step } from './api'
+import Practice from './pages/Practice'
+import { useApi, type Routine } from './api'
 
-type View = { name: 'home' } | { name: 'routine'; id: string } | { name: 'camera' } | { name: 'practise'; id: string; step: Step }
+type View = { name: 'home' } | { name: 'routine'; id: string } | { name: 'camera' }
 
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
@@ -28,23 +29,18 @@ export default function App() {
       </SignedOut>
       <SignedIn>
         {view.name === 'home' && <Home open={(id) => setView({ name: 'routine', id })} tryCamera={() => setView({ name: 'camera' })} />}
-        {view.name === 'routine' && <RoutineView id={view.id} practise={(step) => setView({ name: 'practise', id: view.id, step })} />}
+        {view.name === 'routine' && <RoutineView id={view.id} />}
         {view.name === 'camera' && <PoseCam />}
-        {view.name === 'practise' && (
-          <section>
-            <p className="notice">Practice screen coming next (ghost, scoring, coach). Camera preview:</p>
-            <PoseCam />
-          </section>
-        )}
       </SignedIn>
     </main>
   )
 }
 
-// Shows processing progress until the course is ready, then the lesson tree.
-function RoutineView({ id, practise }: { id: string; practise: (step: Step) => void }) {
+// Shows processing progress until the course is ready, then the lesson tree / practice.
+function RoutineView({ id }: { id: string }) {
   const api = useApi()
   const [routine, setRoutine] = useState<Routine | null>(null)
+  const [practising, setPractising] = useState<number | null>(null)
   useEffect(() => {
     let stop = false
     let timer = 0
@@ -65,5 +61,19 @@ function RoutineView({ id, practise }: { id: string; practise: (step: Step) => v
     }
   }, [api, id])
   if (!routine) return <p className="notice">Loading…</p>
-  return routine.status === 'ready' ? <LessonTree routine={routine} practise={practise} /> : <Processing routine={routine} />
+  if (routine.status !== 'ready') return <Processing routine={routine} />
+  const steps = routine.lesson_plan.steps ?? []
+  if (practising !== null && steps[practising]) {
+    return (
+      <Practice
+        key={practising}
+        routine={routine}
+        stepIndex={practising}
+        step={steps[practising]}
+        onExit={() => setPractising(null)}
+        onNextStep={() => setPractising(practising + 1 < steps.length ? practising + 1 : null)}
+      />
+    )
+  }
+  return <LessonTree routine={routine} practise={setPractising} />
 }

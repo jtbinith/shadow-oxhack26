@@ -54,7 +54,7 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
         _stage(routine_id, "pose", frames=int(len(raw["image"])))
         _stage(routine_id, "frames_deleted")
 
-        norm = features.normalise(raw["image"])
+        norm = features.normalise(raw["image"], raw["width"], raw["height"])
         world = features.fill_gaps(raw["world"])
         counts = audio.eight_counts(grid["downbeats"], info["duration"])
         analysed = segment.analyse(norm, raw["fps"], counts)

@@ -167,7 +167,14 @@ function drawLabel(ctx: CanvasRenderingContext2D, body: Landmark[], text: string
 
 // Mirrored webcam with every person's body (33 points) and hands (21 points each) drawn on top.
 // Only keypoints ever leave this component.
-export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void }) {
+type Overlay = (ctx: CanvasRenderingContext2D, people: Person[], dancerId: number | null) => void
+
+export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame) => void; overlay?: Overlay }) {
+  // Kept in refs so new callbacks from the parent don't restart the camera.
+  const onFrameRef = useRef(onFrame)
+  const overlayRef = useRef(overlay)
+  onFrameRef.current = onFrame
+  overlayRef.current = overlay
   const video = useRef<HTMLVideoElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState('Starting camera…')
@@ -450,7 +457,8 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             }
             // Hands whose body wasn't found (e.g. someone at the edge of the frame).
             if (!focused) for (const h of loose) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, '#d9d9d9', 1.5, 1.5)
-            if (people.length) onFrame?.({ people, dancerId: dancer.current.id })
+            overlayRef.current?.(ctx, people, dancer.current.id)
+            if (people.length) onFrameRef.current?.({ people, dancerId: dancer.current.id })
             if (now - lastPerfUpdate > 500) {
               lastPerfUpdate = now
               setPerf(`${fps.toFixed(0)} fps · ${mode} · pose (${quality}) ${poseMs.toFixed(0)} ms · hands ${handMs.toFixed(0)} ms${runHands ? '' : ' (every 2nd frame)'} · re-id ${reidReady ? `${reidMs.toFixed(0)} ms` : 'loading'}`)
@@ -474,7 +482,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
       reid.terminate()
       pickAt.current = null
     }
-  }, [onFrame, quality, focus])
+  }, [quality, focus])
 
   // The video is mirrored on screen, so flip the click's x back to camera coordinates.
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
