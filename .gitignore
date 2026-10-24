@@ -25,3 +25,4 @@ uploads/
 .playwright-mcp/
 docker-compose.override.yml
 tools/font/.venv/
+backend/.venv/

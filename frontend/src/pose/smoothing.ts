@@ -21,12 +21,15 @@ class OneEuro {
     }
     const alpha = (cutoff: number) => 1 / (1 + 1 / (2 * Math.PI * cutoff * dt))
     const rawDx = (value - this.x) / dt
-    this.dx += alpha(1) * (rawDx - this.dx)
+    // Speed estimate cutoff: higher reacts sooner to a sudden move (less lag at the start of a hit).
+    this.dx += alpha(D_CUTOFF) * (rawDx - this.dx)
     const cutoff = this.minCutoff + this.beta * Math.abs(this.dx)
     this.x += alpha(cutoff) * (value - this.x)
     return this.x
   }
 }
+
+const D_CUTOFF = 3
 
 // A point counts as seen if the model is at least this confident.
 const MIN_VISIBILITY = 0.5
@@ -43,7 +46,7 @@ export class SkeletonSmoother {
   private beta: number
   private useVisibility: boolean
 
-  constructor(minCutoff = 1.7, beta = 0.3, useVisibility = true) {
+  constructor(minCutoff = 1.0, beta = 3.0, useVisibility = true) {
     this.minCutoff = minCutoff
     this.beta = beta
     this.useVisibility = useVisibility
