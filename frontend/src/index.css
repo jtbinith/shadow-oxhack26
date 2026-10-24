@@ -24,3 +24,9 @@ h1 { margin: 0; letter-spacing: 0.02em; }
   font: 600 0.85rem ui-monospace, monospace; color: #fff;
   background: rgba(0, 0, 0, 0.55); padding: 0.2rem 0.5rem; border-radius: 6px;
 }
+.posecam { cursor: crosshair; }
+.quality {
+  position: absolute; right: 0.75rem; bottom: 0.5rem;
+  font: 600 0.85rem system-ui, sans-serif; color: #fff; cursor: pointer;
+  background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255,255,255,0.3); padding: 0.3rem 0.6rem; border-radius: 6px;
+}

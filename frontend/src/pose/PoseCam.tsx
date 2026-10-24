@@ -6,8 +6,10 @@ import { clothingHistogram } from './appearance'
 
 export type Landmark = NormalizedLandmark
 export type Hand = { side: string; points: Landmark[] }
-export type Person = { id: number; body: Landmark[]; hands: Hand[] }
-export type Frame = { people: Person[] }
+// `world` = the same body points in metres (3D), steadier for angle scoring than screen points.
+export type Person = { id: number; body: Landmark[]; hands: Hand[]; world?: Landmark[] }
+// `dancerId` = the person being coached; everyone else is ignored for scoring.
+export type Frame = { people: Person[]; dancerId: number | null }
 
 const MAX_PEOPLE = 4
 const COLOURS = ['#ffb347', '#ff6fb5', '#9cff6f', '#c58bff']
@@ -69,8 +71,39 @@ function assignHands(bodies: Landmark[][], ids: number[], hands: Hand[]): { peop
 }
 
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-const POSE_MODEL =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task'
+// "full" is the default; "heavy" is more accurate but slower (check the FPS meter).
+export type PoseQuality = 'full' | 'heavy'
+const POSE_MODELS: Record<PoseQuality, string> = {
+  full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
+  heavy: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task',
+}
+// How often to refresh each person's OSNet fingerprint.
+const REID_EVERY_MS = 300
+// If the chosen dancer is gone this long, pick the main person in frame instead.
+const DANCER_TIMEOUT_MS = 3000
+
+// Crop a person out of the video at OSNet's input size (128×256), from their visible keypoints.
+function cropPerson(v: HTMLVideoElement, body: Landmark[], ctx: CanvasRenderingContext2D): Uint8ClampedArray | null {
+  const pts = body.filter((p) => (p.visibility ?? 1) > 0.3)
+  if (pts.length < 8) return null
+  const vw = v.videoWidth
+  const vh = v.videoHeight
+  let x0 = Math.min(...pts.map((p) => p.x)) * vw
+  let x1 = Math.max(...pts.map((p) => p.x)) * vw
+  let y0 = Math.min(...pts.map((p) => p.y)) * vh
+  let y1 = Math.max(...pts.map((p) => p.y)) * vh
+  // Pad, then widen or heighten to OSNet's 1:2 shape so the person isn't stretched.
+  const padX = (x1 - x0) * 0.15
+  const padY = (y1 - y0) * 0.1
+  x0 -= padX; x1 += padX; y0 -= padY; y1 += padY
+  const w = x1 - x0
+  const h = y1 - y0
+  if (h < 60) return null
+  if (w * 2 < h) { const extra = (h / 2 - w) / 2; x0 -= extra; x1 += extra }
+  else { const extra = (w * 2 - h) / 2; y0 -= extra; y1 += extra }
+  ctx.drawImage(v, x0, y0, x1 - x0, y1 - y0, 0, 0, 128, 256)
+  return ctx.getImageData(0, 0, 128, 256).data
+}
 const HAND_MODEL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task'
 
@@ -101,6 +134,25 @@ function drawSkeleton(ctx: CanvasRenderingContext2D, pts: Landmark[], links: Con
   }
 }
 
+// Label above someone's head. The canvas is mirrored on screen, so flip the text back.
+function drawLabel(ctx: CanvasRenderingContext2D, body: Landmark[], text: string, colour: string) {
+  const nose = body[0]
+  if (!nose || nose.visibility === 0) return
+  const x = nose.x * ctx.canvas.width
+  const y = Math.max(24, nose.y * ctx.canvas.height - 60)
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(-1, 1)
+  ctx.font = '700 22px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.lineWidth = 5
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)'
+  ctx.strokeText(text, 0, 0)
+  ctx.fillStyle = colour
+  ctx.fillText(text, 0, 0)
+  ctx.restore()
+}
+
 // Mirrored webcam with every person's body (33 points) and hands (21 points each) drawn on top.
 // Only keypoints ever leave this component.
 export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void }) {
@@ -108,6 +160,11 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState('Starting camera…')
   const [perf, setPerf] = useState('')
+  const [quality, setQuality] = useState<PoseQuality>('full')
+  // The person being coached. Kept across model changes; follows their identity, not their position.
+  const dancer = useRef<{ id: number | null; lastSeen: number }>({ id: null, lastSeen: 0 })
+  // Set by the effect so a click can pick the person under the pointer.
+  const pickAt = useRef<((nx: number, ny: number) => void) | null>(null)
 
   useEffect(() => {
     let landmarker: PoseLandmarker | undefined
@@ -136,6 +193,46 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
     let raf = 0
     let cancelled = false
 
+    // OSNet runs in a background worker; the camera loop never waits for it.
+    const reid = new Worker(new URL('./reid.worker.ts', import.meta.url), { type: 'module' })
+    let reidReady = false
+    let reidBusy = false
+    let reidMs = 0
+    let lastReidAt = 0
+    let reidRequest = 0
+    const cropCanvas = document.createElement('canvas')
+    cropCanvas.width = 128
+    cropCanvas.height = 256
+    const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true })!
+    reid.onmessage = (e) => {
+      const msg = e.data
+      if (msg.type === 'ready') reidReady = true
+      else if (msg.type === 'error') console.warn('re-id model failed to load', msg.message)
+      else if (msg.type === 'embeddings') {
+        reidBusy = false
+        reidMs = 0.8 * reidMs + 0.2 * msg.ms
+        const now = performance.now()
+        msg.ids.forEach((id: number, k: number) => {
+          const change = tracker.addEmbedding(id, msg.embeddings[k], now)
+          // A newcomer recognised as someone who left: if they were the dancer, keep them as the dancer.
+          if (change?.type === 'merge' && dancer.current.id === change.from) dancer.current.id = change.to
+        })
+      }
+    }
+
+    pickAt.current = (nx, ny) => {
+      let best: number | null = null
+      let bestDist = Infinity
+      for (const p of tracker.people()) {
+        const d = Math.hypot(p.cx - nx, p.cy - ny) / p.size
+        if (d < bestDist && d < 2.5) {
+          bestDist = d
+          best = p.id
+        }
+      }
+      if (best !== null) dancer.current = { id: best, lastSeen: performance.now() }
+    }
+
     ;(async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
@@ -145,7 +242,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
         const fileset = await FilesetResolver.forVisionTasks(WASM)
         ;[landmarker, hands] = await Promise.all([
           PoseLandmarker.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
+            baseOptions: { modelAssetPath: POSE_MODELS[quality], delegate: 'GPU' },
             runningMode: 'VIDEO',
             numPoses: MAX_PEOPLE,
             minPoseDetectionConfidence: 0.4,
@@ -210,24 +307,59 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
                 points,
               })),
             )
+            const worldById = new Map(keep.map((i) => [ids[i], body.worldLandmarks[i]]))
             const people = matched.map((person) => ({
               id: person.id,
+              world: worldById.get(person.id),
               body: bodySmooth.smooth(`p${person.id}`, person.body, now),
               hands: person.hands.map((h) => ({ side: h.side, points: handSmooth.smooth(`p${person.id}-${h.side}`, h.points, now) })),
             })).map(fuseHands)
             bodySmooth.prune(now)
             handSmooth.prune(now)
+            // Keep a dancer: the one chosen, or (if they've been gone a while) the biggest person in frame.
+            const d = dancer.current
+            if (d.id !== null && people.some((p) => p.id === d.id)) d.lastSeen = now
+            else if (d.id === null || now - d.lastSeen > DANCER_TIMEOUT_MS) {
+              const main = tracker.people().sort((a, b) => b.size - a.size)[0]
+              if (main) dancer.current = { id: main.id, lastSeen: now }
+            }
+
+            // Refresh fingerprints a few times a second, skipping people who overlap (their crops would mix).
+            if (reidReady && !reidBusy && now - lastReidAt > REID_EVERY_MS) {
+              const tracked = tracker.people()
+              const ids: number[] = []
+              const pixels: Uint8ClampedArray[] = []
+              for (const person of people) {
+                const me = tracked.find((t) => t.id === person.id)
+                if (!me) continue
+                const overlaps = tracked.some((o) => o.id !== me.id && Math.hypot(o.cx - me.cx, o.cy - me.cy) / ((o.size + me.size) / 2) < 1.2)
+                if (overlaps) continue
+                const crop = cropPerson(v, person.body, cropCtx)
+                if (crop) {
+                  ids.push(person.id)
+                  pixels.push(crop)
+                }
+              }
+              if (ids.length) {
+                reidBusy = true
+                lastReidAt = now
+                reid.postMessage({ type: 'embed', requestId: ++reidRequest, ids, pixels })
+              }
+            }
+
             for (const person of people) {
               const colour = COLOURS[person.id % COLOURS.length]
-              drawSkeleton(ctx, person.body, PoseLandmarker.POSE_CONNECTIONS, colour, 4, 3)
+              const isDancer = person.id === dancer.current.id
+              drawSkeleton(ctx, person.body, PoseLandmarker.POSE_CONNECTIONS, colour, isDancer ? 6 : 3, isDancer ? 3.5 : 2.5)
               for (const h of person.hands) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, colour, 2, 2)
+              if (isDancer) drawLabel(ctx, person.body, 'YOU', colour)
             }
             // Hands whose body wasn't found (e.g. someone at the edge of the frame).
             for (const h of loose) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, '#d9d9d9', 1.5, 1.5)
-            if (people.length) onFrame?.({ people })
+            if (people.length) onFrame?.({ people, dancerId: dancer.current.id })
             if (now - lastPerfUpdate > 500) {
               lastPerfUpdate = now
-              setPerf(`${fps.toFixed(0)} fps · pose ${poseMs.toFixed(0)} ms · hands ${handMs.toFixed(0)} ms${runHands ? '' : ' (every 2nd frame)'}`)
+              setPerf(`${fps.toFixed(0)} fps · pose (${quality}) ${poseMs.toFixed(0)} ms · hands ${handMs.toFixed(0)} ms${runHands ? '' : ' (every 2nd frame)'} · re-id ${reidReady ? `${reidMs.toFixed(0)} ms` : 'loading'}`)
             }
           }
           raf = requestAnimationFrame(loop)
@@ -244,15 +376,32 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
       stream?.getTracks().forEach((t) => t.stop())
       landmarker?.close()
       hands?.close()
+      reid.terminate()
+      pickAt.current = null
     }
-  }, [onFrame])
+  }, [onFrame, quality])
+
+  // The video is mirrored on screen, so flip the click's x back to camera coordinates.
+  const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    pickAt.current?.(1 - (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height)
+  }
 
   return (
-    <div className="posecam">
+    <div className="posecam" onClick={onClick} title="Click a person to coach them">
       <video ref={video} playsInline muted />
       <canvas ref={canvas} />
       {status && <p className="notice">{status}</p>}
       {perf && <p className="perf">{perf}</p>}
+      <button
+        className="quality"
+        onClick={(e) => {
+          e.stopPropagation()
+          setQuality((q) => (q === 'full' ? 'heavy' : 'full'))
+        }}
+      >
+        Accuracy: {quality === 'full' ? 'standard' : 'high'}
+      </button>
     </div>
   )
 }

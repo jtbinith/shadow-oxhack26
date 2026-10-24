@@ -23,6 +23,32 @@ const REID_SIMILARITY = 0.7
 // Without a colour sample, someone reappearing this close (torso lengths) this soon gets their ID back.
 const REID_NEAR = 1.5
 const REID_NEAR_MS = 3000
+// OSNet cosine similarity needed to say "same person" when someone returns.
+const EMB_REID = 0.65
+// A track whose fresh fingerprint matches another track's identity this much better is a swap.
+const EMB_SWAP_MARGIN = 0.15
+const EMB_SWAP_MIN = 0.7
+// How long a brand-new person waits for their fingerprint before their ID is final.
+const TENTATIVE_MS = 2000
+
+function dot(a: Float32Array, b: Float32Array): number {
+  let s = 0
+  for (let i = 0; i < a.length; i++) s += a[i] * b[i]
+  return s
+}
+
+function blendUnit(stored: Float32Array, next: Float32Array, rate = 0.2): Float32Array {
+  const out = new Float32Array(stored.length)
+  let norm = 0
+  for (let i = 0; i < stored.length; i++) {
+    out[i] = (1 - rate) * stored[i] + rate * next[i]
+    norm += out[i] * out[i]
+  }
+  norm = Math.sqrt(norm) || 1
+  for (let i = 0; i < out.length; i++) out[i] /= norm
+  return out
+}
+
 // Two bodies whose torsos are this close (torso lengths) are the same person detected twice.
 const DUPLICATE = 0.35
 // Never pair a track with a body whose clothes clearly differ (stops a passer-by "taking over" someone).
@@ -32,6 +58,10 @@ const OVERLAP = 1.0
 
 type Track = {
   id: number
+  // OSNet "who is this" fingerprint (unit vector), averaged over time. Belongs to the identity, not the box.
+  emb: Float32Array | null
+  // Set while a new track hasn't yet been checked against people who left (needs its first fingerprint).
+  tentativeUntil: number
   cx: number
   cy: number
   vx: number
@@ -57,6 +87,7 @@ function torso(body: NormalizedLandmark[]) {
 
 export class PersonTracker {
   private active: Track[] = []
+  private lastReidentified: Track | null = null
   private departed: Track[] = []
   private maxPeople: number
 
@@ -148,6 +179,7 @@ export class PersonTracker {
       if (ids[d] !== -1 || skip.has(d)) continue
       const det = dets[d]
       const taken = new Set(this.active.map((t) => t.id))
+      this.lastReidentified = null
       let id = this.reidentify(det, taken, now)
       if (id === -1) {
         // Prefer an ID nobody has used recently, so a departed person's colour stays theirs.
@@ -163,7 +195,8 @@ export class PersonTracker {
         // This ID now belongs to someone new; forget the departed person who had it.
         this.departed = this.departed.filter((t) => t.id !== id)
       }
-      this.active.push({ id, ...det, vx: 0, vy: 0, lastSeen: now })
+      const reidentified = this.lastReidentified as Track | null
+      this.active.push({ id, ...det, vx: 0, vy: 0, lastSeen: now, emb: reidentified?.emb ?? null, tentativeUntil: reidentified ? 0 : now + TENTATIVE_MS })
       ids[d] = id
     }
     return ids
@@ -188,7 +221,71 @@ export class PersonTracker {
     }
     if (!best) return -1
     this.departed = this.departed.filter((t) => t !== best)
+    this.lastReidentified = best
     return best.id
+  }
+
+  /** Positions of active people, for choosing or clicking on the dancer. */
+  people(): { id: number; cx: number; cy: number; size: number }[] {
+    return this.active.map(({ id, cx, cy, size }) => ({ id, cx, cy, size }))
+  }
+
+  /**
+   * A fresh OSNet fingerprint for the person currently holding `id`.
+   * Returns an ID change if one happened: a newcomer recognised as someone who left (`merge`),
+   * or two people whose identities had been swapped (`swap`).
+   */
+  addEmbedding(id: number, emb: Float32Array, now: number): { type: 'merge' | 'swap'; from: number; to: number } | null {
+    const tr = this.active.find((t) => t.id === id)
+    if (!tr) return null
+
+    // A newcomer: are they actually someone who left a moment ago?
+    if (tr.tentativeUntil > now || (tr.tentativeUntil > 0 && !tr.emb)) {
+      tr.tentativeUntil = 0
+      const taken = new Set(this.active.map((t) => t.id))
+      let best: Track | null = null
+      let bestSim = EMB_REID
+      for (const d of this.departed) {
+        if (!d.emb || (taken.has(d.id) && d.id !== tr.id)) continue
+        const sim = dot(d.emb, emb)
+        if (sim > bestSim) {
+          bestSim = sim
+          best = d
+        }
+      }
+      if (best) {
+        const from = tr.id
+        tr.id = best.id
+        tr.emb = blendUnit(best.emb!, emb)
+        tr.hist = best.hist ?? tr.hist
+        this.departed = this.departed.filter((d) => d !== best && d.id !== from)
+        return from === best.id ? null : { type: 'merge', from, to: best.id }
+      }
+      tr.emb = emb
+      return null
+    }
+
+    if (!tr.emb) {
+      tr.emb = emb
+      return null
+    }
+
+    // Has this box picked up someone else's identity (e.g. after two people crossed)?
+    const own = dot(tr.emb, emb)
+    for (const other of this.active) {
+      if (other === tr || !other.emb) continue
+      const sim = dot(other.emb, emb)
+      if (sim > EMB_SWAP_MIN && sim > own + EMB_SWAP_MARGIN) {
+        // Move the identities (ID, fingerprint, colours) to the right boxes.
+        ;[tr.id, other.id] = [other.id, tr.id]
+        ;[tr.emb, other.emb] = [other.emb, tr.emb]
+        ;[tr.hist, other.hist] = [other.hist, tr.hist]
+        tr.emb = blendUnit(tr.emb!, emb)
+        return { type: 'swap', from: other.id, to: tr.id }
+      }
+    }
+    tr.emb = blendUnit(tr.emb, emb)
+    return null
   }
 
   private move(tr: Track, det: Detection, now: number, learnColour: boolean) {
