@@ -24,3 +24,4 @@ uploads/
 # browser automation snapshots (may contain secrets)
 .playwright-mcp/
 docker-compose.override.yml
+tools/font/.venv/

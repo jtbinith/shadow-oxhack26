@@ -24,7 +24,7 @@ const REID_SIMILARITY = 0.7
 const REID_NEAR = 1.5
 const REID_NEAR_MS = 3000
 // OSNet cosine similarity needed to say "same person" when someone returns.
-const EMB_REID = 0.65
+const EMB_REID = 0.75
 // A track whose fresh fingerprint matches another track's identity this much better is a swap.
 const EMB_SWAP_MARGIN = 0.15
 const EMB_SWAP_MIN = 0.7

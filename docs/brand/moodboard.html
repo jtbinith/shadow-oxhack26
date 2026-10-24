@@ -5,19 +5,20 @@
 <title>Shadow mood board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sedgwick+Ave+Display&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
+  @font-face { font-family: "Shadow Skeleton"; src: url("fonts/ShadowSkeleton.woff2") format("woff2"), url("fonts/ShadowSkeleton.otf") format("opentype"); }
   :root {
-    --stage: #0d0b12;
-    --curtain: #1b1624;
-    --wing: #2a2336;
-    --spot: #ffb347;
-    --ghost: #7fd8ff;
-    --hit: #8ff0b4;
-    --miss: #ff6b81;
-    --ink: #f4efe6;
-    --dim: #a59fb3;
-    --display: "Sedgwick Ave Display", "Permanent Marker", cursive;
+    --stage: #351431;
+    --curtain: #44193f;
+    --wing: #5a2453;
+    --spot: #f55d3e;
+    --ghost: #f4f1bf;
+    --hit: #7fd99a;
+    --miss: #ffc93c;
+    --ink: #f4f1bf;
+    --dim: #c9a9c2;
+    --display: "Shadow Skeleton", sans-serif;
     --body: "Atkinson Hyperlegible", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
@@ -36,20 +37,20 @@
       "figure ui voice";
     /* a single spotlight falling on the wordmark */
     background:
-      radial-gradient(ellipse 620px 420px at 22% 18%, rgba(255,179,71,0.16), transparent 70%),
+      radial-gradient(ellipse 620px 420px at 22% 18%, rgba(245,93,62,0.22), transparent 70%),
       var(--stage);
   }
   .tile { background: var(--curtain); border-radius: 18px; padding: 28px; position: relative; overflow: hidden; }
   .tile h2 { margin: 0 0 16px; font: 700 15px/1.2 var(--body); color: var(--dim); }
 
-  /* Hero: the wordmark is the one bold move. The cyan copy lags behind, like a shadow. */
+  /* Hero: the wordmark is the one bold move. The cream copy lags behind, like a shadow. */
   .hero { grid-area: hero; background: transparent; padding: 20px 8px; display: flex; flex-direction: column; justify-content: center; }
   .wordmark {
-    margin: 0; font: 400 230px/0.9 var(--display); letter-spacing: 0;
+    margin: 0; font: 400 210px/0.9 var(--display); letter-spacing: 0;
     color: var(--spot); position: relative; width: max-content;
   }
   .wordmark::before {
-    content: "Shadow"; position: absolute; left: 14px; top: 10px; z-index: -1;
+    content: "Shadow"; position: absolute; left: 12px; top: 12px; z-index: -1;
     color: transparent; -webkit-text-stroke: 2px var(--ghost); opacity: 0.85;
   }
   .hero { isolation: isolate; }
@@ -72,11 +73,11 @@
 
   /* Type */
   .type { grid-area: type; }
-  .specimen-display { font: 400 74px/0.95 var(--display); margin: 0; }
-  .specimen-count { font: 400 46px/1 var(--display); color: var(--spot); margin: 14px 0 6px; letter-spacing: 0; }
+  .specimen-display { font: 400 46px/1.15 var(--display); margin: 0; }
+  .specimen-count { font: 400 46px/1 var(--display); color: var(--spot); margin: 10px 0 4px; letter-spacing: 0.04em; }
   .specimen-count i { font-style: normal; color: var(--ghost); }
   .specimen-body { margin: 10px 0 0; font-size: 18px; max-width: 34ch; }
-  .credit { margin-top: 14px; font-size: 14px; color: var(--dim); }
+  .credit { margin: 6px 0 0; font-size: 14px; color: var(--dim); }
 
   /* UI snippet: score after an 8-count */
   .ui { grid-area: ui; display: flex; flex-direction: column; gap: 10px; }
@@ -87,10 +88,10 @@
     font: 400 26px var(--display); color: var(--stage);
   }
   .c-hit { background: var(--hit); }
-  .c-ok { background: var(--spot); }
+  .c-ok { background: var(--spot); color: var(--ink) !important; }
   .c-miss { background: var(--miss); }
   .score { display: flex; align-items: baseline; gap: 14px; }
-  .score strong { font: 400 52px/1 var(--display); color: var(--spot); }
+  .score strong { font: 400 46px/1 var(--display); color: var(--spot); }
   .score span { color: var(--dim); }
   .cue {
     margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--wing);
@@ -116,21 +117,20 @@
   <section class="tile palette">
     <h2>Colour, and what each one means</h2>
     <div class="swatches">
-      <div class="sw"><div class="chip" style="background:var(--stage);outline:1px solid var(--wing)"></div><div><b>Stage</b><span>The dark room you dance in <code>#0D0B12</code></span></div></div>
-      <div class="sw"><div class="chip" style="background:var(--curtain);outline:1px solid var(--wing)"></div><div><b>Curtain</b><span>Panels and cards <code>#1B1624</code></span></div></div>
-      <div class="sw"><div class="chip" style="background:var(--spot)"></div><div><b>Spotlight</b><span>You, your score, the main action <code>#FFB347</code></span></div></div>
-      <div class="sw"><div class="chip" style="background:var(--ghost)"></div><div><b>Ghost</b><span>The dancer you follow, coach cues <code>#7FD8FF</code></span></div></div>
-      <div class="sw"><div class="chip" style="background:var(--hit)"></div><div><b>On the beat</b><span>Joints and counts you nailed <code>#8FF0B4</code></span></div></div>
-      <div class="sw"><div class="chip" style="background:var(--miss)"></div><div><b>Off the beat</b><span>The one thing to fix next <code>#FF6B81</code></span></div></div>
-      <div class="sw"><div class="chip" style="background:var(--ink)"></div><div><b>House lights</b><span>Text <code>#F4EFE6</code></span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--stage);outline:1px solid var(--wing)"></div><div><b>Eggplant</b><span>The stage you dance on <code>#351431</code></span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--curtain);outline:1px solid var(--wing)"></div><div><b>Curtain</b><span>Panels and cards <code>#44193F</code></span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--spot)"></div><div><b>Tomato</b><span>You, your score, the main action <code>#F55D3E</code></span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--ghost)"></div><div><b>Ghost</b><span>The dancer you follow, coach cues, text <code>#F4F1BF</code></span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--hit)"></div><div><b>On the beat</b><span>Joints and counts you nailed <code>#7FD99A</code></span></div></div>
+      <div class="sw"><div class="chip" style="background:var(--miss)"></div><div><b>Look here</b><span>The one thing to fix next <code>#FFC93C</code></span></div></div>
     </div>
   </section>
 
   <section class="tile figure">
     <h2>The motif: you, and your shadow just ahead</h2>
-    <svg viewBox="0 0 400 420" role="img" aria-label="An amber skeleton dancer following a cyan ghost skeleton">
+    <svg viewBox="0 0 400 420" role="img" aria-label="A tomato skeleton dancer following a cream ghost skeleton">
       <!-- ghost: same pose, a beat ahead -->
-      <g transform="translate(30,-4)" stroke="#7fd8ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6">
+      <g transform="translate(30,-4)" stroke="#f4f1bf" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.8">
         <circle cx="200" cy="74" r="24"/>
         <path d="M200 100 L200 214"/>
         <path d="M200 124 L146 92 L140 26"/>
@@ -138,8 +138,8 @@
         <path d="M200 214 L162 296 L170 386"/>
         <path d="M200 214 L246 288 L284 344"/>
       </g>
-      <!-- you: amber, slightly behind the ghost -->
-      <g stroke="#ffb347" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <!-- you: tomato, slightly behind the ghost -->
+      <g stroke="#f55d3e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none">
         <circle cx="200" cy="74" r="24"/>
         <path d="M200 100 L200 214"/>
         <path d="M200 124 L148 96 L132 46"/>
@@ -149,25 +149,24 @@
       </g>
       <!-- joint feedback -->
       <g>
-        <circle cx="148" cy="96" r="9" fill="#8ff0b4"/>
-        <circle cx="132" cy="46" r="9" fill="#ff6b81"/>
-        <circle cx="252" cy="160" r="9" fill="#8ff0b4"/>
-        <circle cx="292" cy="150" r="9" fill="#8ff0b4"/>
-        <circle cx="162" cy="296" r="9" fill="#8ff0b4"/>
-        <circle cx="246" cy="288" r="9" fill="#ffb347"/>
-        <circle cx="170" cy="386" r="9" fill="#8ff0b4"/>
-        <circle cx="284" cy="344" r="9" fill="#8ff0b4"/>
+        <circle cx="148" cy="96" r="9" fill="#7fd99a"/>
+        <circle cx="132" cy="46" r="9" fill="#ffc93c"/>
+        <circle cx="252" cy="160" r="9" fill="#7fd99a"/>
+        <circle cx="292" cy="150" r="9" fill="#7fd99a"/>
+        <circle cx="162" cy="296" r="9" fill="#7fd99a"/>
+        <circle cx="246" cy="288" r="9" fill="#ffc93c"/>
+        <circle cx="170" cy="386" r="9" fill="#7fd99a"/>
+        <circle cx="284" cy="344" r="9" fill="#7fd99a"/>
       </g>
     </svg>
-    <p>Skeletons, not video. The amber you is always chasing the cyan ghost, and every joint lights up green or pink as you move. Here the ghost shows the hand needs to go higher.</p>
+    <p>Skeletons, not video. The tomato you is always chasing the cream ghost, and every joint lights up green or yellow as you move. Here the ghost shows the hand needs to go higher.</p>
   </section>
 
   <section class="tile type">
     <h2>Type</h2>
     <p class="specimen-display">Five, six, seven, eight</p>
     <p class="specimen-count">1 2 3 4 <i>5</i> 6 7 8</p>
-    <p class="specimen-body">Atkinson Hyperlegible for everything you read mid-move, built to be clear at a glance from across the room.</p>
-    <p class="credit">Display: Sedgwick Ave Display, a hand-drawn graffiti face made by a Bronx tagger. Body: Atkinson Hyperlegible.</p>
+    <p class="credit">Headings: Shadow Skeleton, our own font, built from bones and joints like the pose skeleton. Body: Atkinson Hyperlegible.</p>
   </section>
 
   <section class="tile ui">

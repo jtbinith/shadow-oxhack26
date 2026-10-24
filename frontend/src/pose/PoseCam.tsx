@@ -71,11 +71,14 @@ function assignHands(bodies: Landmark[][], ids: number[], hands: Hand[]): { peop
 }
 
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-// "full" is the default; "heavy" is more accurate but slower (check the FPS meter).
-export type PoseQuality = 'full' | 'heavy'
+// "fast" (lite) is the default because responsiveness matters most for dance;
+// "standard" (full) and "high" (heavy) are more accurate but slower (check the FPS meter).
+export type PoseQuality = 'fast' | 'standard' | 'high'
+const NEXT_QUALITY: Record<PoseQuality, PoseQuality> = { fast: 'standard', standard: 'high', high: 'fast' }
 const POSE_MODELS: Record<PoseQuality, string> = {
-  full: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
-  heavy: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task',
+  fast: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+  standard: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task',
+  high: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task',
 }
 // How often to refresh each person's OSNet fingerprint.
 const REID_EVERY_MS = 300
@@ -99,6 +102,9 @@ function cropPerson(v: HTMLVideoElement, body: Landmark[], ctx: CanvasRenderingC
   const w = x1 - x0
   const h = y1 - y0
   if (h < 60) return null
+  // A person mostly cut off by the frame edge gives a misleading fingerprint; skip them.
+  const inside = (Math.min(x1, vw) - Math.max(x0, 0)) * (Math.min(y1, vh) - Math.max(y0, 0))
+  if (inside < 0.75 * w * h) return null
   if (w * 2 < h) { const extra = (h / 2 - w) / 2; x0 -= extra; x1 += extra }
   else { const extra = (w * 2 - h) / 2; y0 -= extra; y1 += extra }
   ctx.drawImage(v, x0, y0, x1 - x0, y1 - y0, 0, 0, 128, 256)
@@ -160,7 +166,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState('Starting camera…')
   const [perf, setPerf] = useState('')
-  const [quality, setQuality] = useState<PoseQuality>('full')
+  const [quality, setQuality] = useState<PoseQuality>('fast')
   // The person being coached. Kept across model changes; follows their identity, not their position.
   const dancer = useRef<{ id: number | null; lastSeen: number }>({ id: null, lastSeen: 0 })
   // Set by the effect so a click can pick the person under the pointer.
@@ -170,6 +176,8 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
     let landmarker: PoseLandmarker | undefined
     let hands: HandLandmarker | undefined
     const tracker = new PersonTracker(MAX_PEOPLE)
+    // A fresh tracker means fresh IDs, so choose the dancer again.
+    dancer.current = { id: null, lastSeen: 0 }
     // Tuned for dancing: steady when still, follows fast moves with little lag.
     const bodySmooth = new SmootherBank(2.5, 0.6)
     // Fingers move fastest; hand points have no visibility score.
@@ -235,7 +243,8 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
 
     ;(async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
+        // 960×540 is plenty for the models (they work at ~256 px) and much cheaper to process than 720p.
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 960, height: 540, frameRate: 30 }, audio: false })
         if (cancelled) return
         video.current!.srcObject = stream
         await video.current!.play()
@@ -252,7 +261,8 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
           HandLandmarker.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
             runningMode: 'VIDEO',
-            numHands: MAX_PEOPLE * 2,
+            // Four hands covers the dancer plus one other person; more costs frame rate.
+            numHands: 4,
             minHandDetectionConfidence: 0.5,
             minHandPresenceConfidence: 0.5,
             minTrackingConfidence: 0.6,
@@ -277,7 +287,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const body = landmarker.detectForVideo(v, now)
             poseMs = 0.9 * poseMs + 0.1 * (performance.now() - t0)
             // When the frame rate drops, run the hand model every other frame.
-            const runHands = fps >= 24 || frameNo % 2 === 0 || !lastHands
+            const runHands = fps >= 27 || frameNo % 2 === 0 || !lastHands
             if (runHands) {
               t0 = performance.now()
               lastHands = hands.detectForVideo(v, now)
@@ -397,10 +407,10 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
         className="quality"
         onClick={(e) => {
           e.stopPropagation()
-          setQuality((q) => (q === 'full' ? 'heavy' : 'full'))
+          setQuality((q) => NEXT_QUALITY[q])
         }}
       >
-        Accuracy: {quality === 'full' ? 'standard' : 'high'}
+        Accuracy: {quality}
       </button>
     </div>
   )
