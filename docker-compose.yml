@@ -1,0 +1,7 @@
+# Local dev. Published on 127.0.0.1 only, so nothing on the network can reach it.
+services:
+  app:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:7860:7860"

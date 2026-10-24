@@ -1,0 +1,18 @@
+services:
+  app:
+    image: shadow-app
+    build: ../..
+    env_file: .env
+    # No ports published: only Caddy is reachable, over the compose network.
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+volumes:
+  caddy_data:

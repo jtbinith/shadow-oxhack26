@@ -1,0 +1,4 @@
+{$PUBLIC_HOSTNAME} {
+    encode gzip
+    reverse_proxy app:7860
+}
