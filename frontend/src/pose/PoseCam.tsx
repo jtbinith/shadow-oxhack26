@@ -170,9 +170,11 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height)
             const hists = body.landmarks.map((b) => clothingHistogram(pixels, b))
             const ids = tracker.update(body.landmarks, hists, now)
+            // Drop duplicates / over-limit bodies before giving out hands.
+            const keep = ids.map((id, i) => (id >= 0 ? i : -1)).filter((i) => i >= 0)
             const { people: matched, loose } = assignHands(
-              body.landmarks,
-              ids,
+              keep.map((i) => body.landmarks[i]),
+              keep.map((i) => ids[i]),
               hand.landmarks.map((points, i) => ({
                 side: hand.handedness[i]?.[0]?.categoryName ?? 'Unknown',
                 points,

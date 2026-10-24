@@ -23,6 +23,12 @@ const REID_SIMILARITY = 0.7
 // Without a colour sample, someone reappearing this close (torso lengths) this soon gets their ID back.
 const REID_NEAR = 1.5
 const REID_NEAR_MS = 3000
+// Two bodies whose torsos are this close (torso lengths) are the same person detected twice.
+const DUPLICATE = 0.35
+// Never pair a track with a body whose clothes clearly differ (stops a passer-by "taking over" someone).
+const MIN_COLOUR_MATCH = 0.55
+// Bodies this close to another body are overlapping; don't learn their colours (they'd mix).
+const OVERLAP = 1.0
 
 type Track = {
   id: number
@@ -59,7 +65,7 @@ export class PersonTracker {
   }
 
   /**
-   * Returns one stable ID per body, in the same order as `bodies`.
+   * Returns one stable ID per body, in the same order as `bodies` (-1 = duplicate or over the limit).
    * `hists` holds each body's clothing histogram (null when it couldn't be sampled).
    */
   update(bodies: NormalizedLandmark[][], hists: (Float32Array | null)[], now: number): number[] {
@@ -71,17 +77,38 @@ export class PersonTracker {
     const dets: Detection[] = bodies.map((b, i) => ({ ...torso(b), hist: hists[i] }))
     const ids: number[] = new Array(bodies.length).fill(-1)
 
+    // 0. Drop duplicate detections of the same person (happens during fast, blurry movement).
+    const skip = new Set<number>()
+    for (let a = 0; a < dets.length; a++)
+      for (let b = a + 1; b < dets.length; b++) {
+        if (skip.has(a) || skip.has(b)) continue
+        const scale = (dets[a].size + dets[b].size) / 2
+        if (Math.hypot(dets[a].cx - dets[b].cx, dets[a].cy - dets[b].cy) / scale < DUPLICATE) skip.add(b)
+      }
+    // Overlapping people: still tracked, but their colours aren't learned this frame.
+    const overlapping = dets.map((d, i) =>
+      dets.some((o, j) => j !== i && !skip.has(j) && Math.hypot(d.cx - o.cx, d.cy - o.cy) / ((d.size + o.size) / 2) < OVERLAP),
+    )
+
     // 1. Match detections to active tracks, cheapest pair first.
     const pairs: { t: number; d: number; cost: number }[] = []
     this.active.forEach((tr, t) => {
       const dt = Math.min((now - tr.lastSeen) / 1000, 0.5)
-      const px = tr.cx + tr.vx * dt
-      const py = tr.cy + tr.vy * dt
+      // Trust the motion guess less the longer someone has been unseen.
+      const damp = Math.exp(-dt / 0.3)
+      const px = tr.cx + tr.vx * dt * damp
+      const py = tr.cy + tr.vy * dt * damp
       dets.forEach((det, d) => {
+        if (skip.has(d)) return
         const scale = (tr.size + det.size) / 2
         const dist = Math.hypot(det.cx - px, det.cy - py) / scale
         const sizeChange = Math.abs(Math.log(det.size / tr.size))
-        const colour = tr.hist && det.hist ? 1 - similarity(tr.hist, det.hist) : 0
+        let colour = 0
+        if (tr.hist && det.hist) {
+          const sim = similarity(tr.hist, det.hist)
+          if (sim < MIN_COLOUR_MATCH) return
+          colour = 1 - sim
+        }
         const cost = dist + sizeChange + COLOUR_WEIGHT * colour
         if (cost < MAX_MATCH) pairs.push({ t, d, cost })
       })
@@ -92,12 +119,33 @@ export class PersonTracker {
       if (usedTracks.has(t) || ids[d] !== -1) continue
       usedTracks.add(t)
       ids[d] = this.active[t].id
-      this.move(this.active[t], dets[d], now)
+      this.move(this.active[t], dets[d], now, !overlapping[d])
+    }
+
+    // 1b. A body that didn't match by position may still be a currently tracked person who
+    //     jumped (fast move, blur): match it to an unmatched track by clothing colour.
+    for (let d = 0; d < dets.length; d++) {
+      if (ids[d] !== -1 || skip.has(d) || !dets[d].hist) continue
+      let best = -1
+      let bestSim = REID_SIMILARITY
+      this.active.forEach((tr, t) => {
+        if (usedTracks.has(t) || !tr.hist) return
+        const sim = similarity(tr.hist, dets[d].hist!)
+        if (sim > bestSim) {
+          bestSim = sim
+          best = t
+        }
+      })
+      if (best >= 0) {
+        usedTracks.add(best)
+        ids[d] = this.active[best].id
+        this.move(this.active[best], dets[d], now, !overlapping[d])
+      }
     }
 
     // 2. Unmatched detections: someone who left and came back, or someone new.
     for (let d = 0; d < bodies.length; d++) {
-      if (ids[d] !== -1) continue
+      if (ids[d] !== -1 || skip.has(d)) continue
       const det = dets[d]
       const taken = new Set(this.active.map((t) => t.id))
       let id = this.reidentify(det, taken, now)
@@ -143,7 +191,7 @@ export class PersonTracker {
     return best.id
   }
 
-  private move(tr: Track, det: Detection, now: number) {
+  private move(tr: Track, det: Detection, now: number, learnColour: boolean) {
     const dt = Math.max((now - tr.lastSeen) / 1000, 1 / 120)
     // Smoothed velocity, so one noisy frame doesn't throw the prediction off.
     tr.vx = 0.7 * tr.vx + 0.3 * ((det.cx - tr.cx) / dt)
@@ -151,7 +199,7 @@ export class PersonTracker {
     tr.cx = det.cx
     tr.cy = det.cy
     tr.size = 0.8 * tr.size + 0.2 * det.size
-    if (det.hist) tr.hist = tr.hist ? blend(tr.hist, det.hist) : det.hist
+    if (det.hist && learnColour) tr.hist = tr.hist ? blend(tr.hist, det.hist) : det.hist
     tr.lastSeen = now
   }
 }
