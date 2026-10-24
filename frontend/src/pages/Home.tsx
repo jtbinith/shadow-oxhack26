@@ -66,7 +66,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
         </label>
         <label className="rights">
           <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} />
-          This is my routine, my teacher's, or I'm using it for personal practice. Shadow deletes the audio and video after processing.
+          This is my routine, my teacher's, or I'm using it for personal practice. Shadow deletes the audio after processing and keeps a silent copy of the video for your practice preview.
         </label>
         <p className="tips">Best results: one dancer, full body in frame, camera still and front-on, good light.</p>
         <button className="primary" disabled={!file || !rights || busy} onClick={upload}>

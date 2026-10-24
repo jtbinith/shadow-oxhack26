@@ -39,7 +39,7 @@ describe('scoreRep', () => {
     const wrong = refFrames.map((_, i) => ({ t: i / 30, frame: person(60) }))
     const s = scoreRep(wrong, ref(refFrames))
     expect(s.topFault?.body_part).toMatch(/right_(fore)?arm/)
-    expect(s.cue).toMatch(/^Right (fore)?arm (higher|lower) on \d\.$/)
+    expect(s.cue).toMatch(/^Right (fore)?arm (higher|lower) on \d( — about \d+° off)?\.$/)
   })
 
   it('arms-only drill ignores the legs', () => {

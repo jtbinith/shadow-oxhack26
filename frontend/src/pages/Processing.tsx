@@ -7,7 +7,7 @@ const STEPS: { stage: string; label: string }[] = [
   { stage: 'beats', label: 'Beats and counts found' },
   { stage: 'audio_deleted', label: 'Audio deleted' },
   { stage: 'pose', label: 'Dancer’s skeleton extracted' },
-  { stage: 'frames_deleted', label: 'Video frames deleted' },
+  { stage: 'video_kept', label: 'Silent video kept for your previews' },
   { stage: 'segmented', label: 'Cut into 8-counts' },
   { stage: 'planned', label: 'Course built' },
 ]

@@ -167,3 +167,25 @@ def replan(routine_id: str, body: ReplanIn, user_id: str = User) -> dict:
         e["difficulty"] = e["difficulty"] or 0.5
         e["hits"] = sum(1 for m in (e.pop("key_moments") or []) if m.get("type") == "hit")
     return coach.run(routine_id, user_id, body.request, ecs, tempo)
+
+
+class AskIn(BaseModel):
+    question: str = Field(min_length=2, max_length=300)
+    step_index: int = Field(ge=0, default=0)
+    rep_context: dict | None = None
+
+
+@router.post("/ask")
+def ask_coach(routine_id: str, body: AskIn, user_id: str = User) -> dict:
+    """Mid-practice questions ("am I lifting my arm high enough?"), answered from the learner's data."""
+    from ..agent import coach
+
+    with _pool().connection() as c:
+        _owned(c, routine_id, user_id)
+    try:
+        return coach.ask(routine_id, user_id, body.question, body.step_index, body.rep_context)
+    except Exception:
+        return {
+            "answer": "I couldn't reach my notes just now — but from your last rep, focus on the cue I gave you and try it slower.",
+            "drill": {"drill": "full", "speed": 0.5, "reason": "Slower rep while the coach reconnects"},
+        }

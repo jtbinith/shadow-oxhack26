@@ -123,6 +123,8 @@ export type RepScore = {
   cue: string
   worstCount: number
   lost?: boolean
+  /** Human-readable detail for the feedback card (the cue stays single and spoken). */
+  notes: string[]
 }
 
 export type ScoreOptions = {
@@ -162,7 +164,7 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
   const refDirs = ref.frames.map(boneDirs)
   const usable = user.filter((u) => u.frame)
   if (usable.length < 5) {
-    return { similarity: 0, shape: 0, timing: null, dynamics: null, perCount: ref.counts.map(() => 0), timingBiasMs: null, topFault: null, cue: 'Step back so I can see your whole body.', worstCount: 1 }
+    return { similarity: 0, shape: 0, timing: null, dynamics: null, perCount: ref.counts.map(() => 0), timingBiasMs: null, topFault: null, cue: 'Step back so I can see your whole body.', worstCount: 1, notes: ['I could barely see you — full body in frame, ~3 m back.'] }
   }
   const userDirs = usable.map((u) => boneDirs(u.frame))
 
@@ -194,11 +196,19 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
   const perCount = perCountCost.map((c) => toScore(c.n ? c.sum / c.n : D_NOVICE))
   const worst = perCount.indexOf(Math.min(...perCount))
 
-  // Biggest shape error: the bone that's furthest off during the worst count.
+  // Biggest shape error: the bone that's furthest off during the worst count
+  // (and per-bone errors over the whole rep, for the detailed notes).
   let shapeFault: Fault | null = null
+  const overall = BONES.map(() => ({ sum: 0, n: 0 }))
   {
     const errs = BONES.map(() => ({ sum: 0, n: 0, dy: 0 }))
     for (const [i, j] of pathPairs) {
+      userDirs[i].forEach((u, b) => {
+        const r = refDirs[j][b]
+        if (!mask[b] || !u || !r) return
+        overall[b].sum += angle(u, r)
+        overall[b].n++
+      })
       const t = j / ref.fps
       if (Math.max(0, countEnds.findIndex((e) => t < e)) !== worst) continue
       userDirs[i].forEach((u, b) => {
@@ -299,6 +309,26 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
     [dynamics ?? 100, dynFault],
   ]
   const topFault = candidates.filter(([, f]) => f).sort((a, b) => a[0] - b[0])[0]?.[1] ?? null
-  const cue = opts.vocabulary?.(topFault) ?? cueFor(topFault)
-  return { similarity, shape, timing, dynamics, perCount, timingBiasMs: bias, topFault, cue, worstCount: worst + 1 }
+  let cue = opts.vocabulary?.(topFault) ?? cueFor(topFault)
+  if (topFault?.type === 'shape' && (topFault.magnitude ?? 0) >= 35) cue = cue.replace(/\.$/, ` — about ${topFault.magnitude}° off.`)
+
+  // Detailed notes for the feedback card.
+  const notes: string[] = []
+  const name = (b: number) => BONE_PART[b].replace('_', ' ')
+  const limbErrs = overall
+    .map((e, b) => ({ b, err: e.n ? e.sum / e.n : 0 }))
+    .filter((x) => x.b < 8 && x.err > 18)
+    .sort((a, b) => b.err - a.err)
+    .slice(0, 2)
+  for (const { b, err } of limbErrs) notes.push(`Your ${name(b)} averaged ~${Math.round(err)}° off the routine's line.`)
+  if (bias !== null && Math.abs(bias) > 60) notes.push(`Timing: you hit ~${Math.abs(bias)} ms ${bias > 0 ? 'late' : 'early'} on average${timing !== null && timing >= 70 ? ', but consistently — tighten it and timing jumps' : ''}.`)
+  else if (timing !== null && timing >= 80) notes.push('Timing: locked in. Hits landed on the beat.')
+  if (dynamics !== null && dynamics < 60) notes.push(dynFault?.type === 'stiff' ? 'Energy: you overshot the hits — same shape, less force.' : 'Energy: the routine hits harder than you did — attack the accents.')
+  else if (dynamics !== null && dynamics >= 80) notes.push('Energy: your sharpness matched the routine.')
+  const good = perCount.map((v, k) => (v >= 80 ? k + 1 : 0)).filter(Boolean)
+  if (good.length) notes.push(`Clean counts: ${good.join(', ')}.`)
+  const weak = perCount.map((v, k) => (v < 60 ? k + 1 : 0)).filter(Boolean)
+  if (weak.length && weak.length <= 4) notes.push(`Counts to drill: ${weak.join(', ')} — the replay below shows count ${worst + 1}.`)
+
+  return { similarity, shape, timing, dynamics, perCount, timingBiasMs: bias, topFault, cue, worstCount: worst + 1, notes }
 }

@@ -3,7 +3,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Response, UploadFile
 from psycopg.rows import dict_row
 
 from .. import db
@@ -118,6 +118,16 @@ def get_reference(routine_id: str, idx: int, user_id: str = User) -> dict:
     pts = np.nan_to_num(data["points"].astype(np.float32), nan=0.0).round(4)
     world = np.nan_to_num(data["world"].astype(np.float32), nan=0.0).round(4)
     return {"fps": 30, "start": row[1], "end": row[2], "counts": row[3], "points": pts.tolist(), "world": world.tolist()}
+
+
+@router.get("/routines/{routine_id}/video")
+def get_video(routine_id: str, user_id: str = User) -> Response:
+    """The processed routine video (silent, 30 fps), for the side-by-side practice preview."""
+    with _pool().connection() as c:
+        row = c.execute("SELECT video FROM routines WHERE id = %s AND user_id = %s", (routine_id, user_id)).fetchone()
+    if not row or row[0] is None:
+        raise HTTPException(404, "No preview video for this routine")
+    return Response(bytes(row[0]), media_type="video/mp4", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.delete("/routines/{routine_id}", status_code=204)

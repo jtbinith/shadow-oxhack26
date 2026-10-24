@@ -50,9 +50,12 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
                 _stage(routine_id, "pose_progress", percent=int(p * 100))
 
         raw = pose.extract(video, progress)
-        shutil.rmtree(work, ignore_errors=True)  # the video frames are gone from here on
+        # Keep the silent 30 fps video for the in-app preview (the learner asked to see the
+        # original moves). The AUDIO stays deleted — the recording of the song is never stored.
+        video_bytes = video.read_bytes()
+        shutil.rmtree(work, ignore_errors=True)
         _stage(routine_id, "pose", frames=int(len(raw["image"])))
-        _stage(routine_id, "frames_deleted")
+        _stage(routine_id, "video_kept", mb=round(len(video_bytes) / 1e6, 1))
 
         norm = features.normalise(raw["image"], raw["width"], raw["height"])
         world = features.fill_gaps(raw["world"])
@@ -75,8 +78,8 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
                 )
             c.execute(
                 """UPDATE routines SET status = 'ready', tempo_bpm = %s, beats = %s, downbeats = %s, fingerprint = %s,
-                   lesson_plan = %s, duration_s = %s, beat_source = %s WHERE id = %s""",
-                (grid["tempo"], grid["beats"], grid["downbeats"], grid["fingerprint"], json.dumps(plan.model_dump() | {"source": source}), info["duration"], grid["source"], routine_id),
+                   lesson_plan = %s, duration_s = %s, beat_source = %s, video = %s WHERE id = %s""",
+                (grid["tempo"], grid["beats"], grid["downbeats"], grid["fingerprint"], json.dumps(plan.model_dump() | {"source": source}), info["duration"], grid["source"], video_bytes, routine_id),
             )
     except Exception as e:
         log.exception("processing failed")

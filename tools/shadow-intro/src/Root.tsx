@@ -7,7 +7,7 @@ export const RemotionRoot: React.FC = () => {
     <Composition
       id="ShadowReveal"
       component={ShadowReveal}
-      durationInFrames={150}
+      durationInFrames={300}
       fps={30}
       width={1280}
       height={720}

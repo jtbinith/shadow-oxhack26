@@ -89,6 +89,55 @@ function drawPose(ctx: CanvasRenderingContext2D, f: Frame, at: { x: number; y: n
   })
 }
 
+// A solid, translucent body (torso, head, tapered limbs) — reads as a dancer, not a stick figure.
+function drawBodyGhost(ctx: CanvasRenderingContext2D, f: Frame, at: { x: number; y: number; torso: number }, colours: (string | null)[]) {
+  const P = (p: [number, number]) => [at.x + p[0] * at.torso, at.y + p[1] * at.torso] as const
+  ctx.save()
+  // torso
+  const [ls, rs, rh, lh] = [f[11], f[12], f[24], f[23]]
+  if (ls && rs && rh && lh) {
+    ctx.beginPath()
+    const pts = [ls, rs, rh, lh].map(P)
+    ctx.moveTo(pts[0][0], pts[0][1])
+    for (const [x, y] of pts.slice(1)) ctx.lineTo(x, y)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(127,216,255,0.28)'
+    ctx.strokeStyle = 'rgba(127,216,255,0.8)'
+    ctx.lineWidth = at.torso * 0.05
+    ctx.lineJoin = 'round'
+    ctx.fill()
+    ctx.stroke()
+    // head
+    if (f[0]) {
+      const mid = P([(ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2])
+      const nose = P(f[0])
+      const r = Math.max(8, Math.hypot(nose[0] - mid[0], nose[1] - mid[1]) * 0.55)
+      ctx.beginPath()
+      ctx.arc(nose[0], nose[1] + r * 0.35, r, 0, 2 * Math.PI)
+      ctx.fill()
+      ctx.stroke()
+    }
+  }
+  // limbs: thick near the body, slimmer at the tip
+  BONES.forEach(([a, b], i) => {
+    if (i >= 8) return
+    const pa = f[a]
+    const pb = f[b]
+    const c = colours[i]
+    if (!pa || !pb || !c) return
+    const [x1, y1] = P(pa)
+    const [x2, y2] = P(pb)
+    ctx.strokeStyle = c
+    ctx.lineCap = 'round'
+    ctx.lineWidth = at.torso * (i % 2 === 0 ? 0.17 : 0.12) // upper limb thicker than fore-limb
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.stroke()
+  })
+  ctx.restore()
+}
+
 function drawArrow(ctx: CanvasRenderingContext2D, fx: number, fy: number, tx: number, ty: number) {
   const head = 14
   const ang = Math.atan2(ty - fy, tx - fx)
@@ -132,6 +181,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const samples = useRef<UserSample[]>([])
   const dancerRef = useRef<Person | undefined>(undefined)
   const audio = useRef<AudioContext | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const refVideo = useRef<HTMLVideoElement>(null)
+  const [question, setQuestion] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [coachAnswer, setCoachAnswer] = useState<{ answer: string; drill: { drill: Drill; speed: number; reason: string } | null } | null>(null)
   const lostSince = useRef<number | null>(null)
   const style = styleFor(routine.style)
   const { getToken } = useAuth()
@@ -141,6 +195,28 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const speak = useRef(makeSpeak(getToken, () => personaRef.current)).current
   const replay = useRef<HTMLCanvasElement>(null)
   clock.current.phase = phase
+
+  // The original (silent) routine video, for the side-by-side preview.
+  useEffect(() => {
+    let url: string | null = null
+    api<Response>(`/api/routines/${routine.id}/video`, {}).catch(() => null) // warm auth; real fetch below
+    ;(async () => {
+      try {
+        const token = await getToken()
+        const res = await fetch(`/api/routines/${routine.id}/video`, { headers: { Authorization: `Bearer ${token}` } })
+        if (!res.ok) return
+        url = URL.createObjectURL(await res.blob())
+        setVideoUrl(url)
+      } catch { /* no preview */ }
+    })()
+    return () => { if (url) URL.revokeObjectURL(url) }
+  }, [api, getToken, routine.id])
+
+  // Segment of the original video this step covers (for preview looping / sync).
+  const seg = (() => {
+    const ecs = routine.eight_counts.filter((e) => step.eight_counts.includes(e.idx))
+    return { start: Math.min(...ecs.map((e) => e.start_s)), end: Math.max(...ecs.map((e) => e.end_s)) }
+  })()
 
   // Load the reference for every 8-count in this step and join them into one timeline.
   useEffect(() => {
@@ -182,6 +258,48 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       cancelled = true
     }
   }, [api, routine, step, drill])
+
+  // Preview video behaviour: loop the step while getting ready; play in sync during the rep.
+  useEffect(() => {
+    const v = refVideo.current
+    if (!v || !videoUrl) return
+    v.playbackRate = Math.min(Math.max(speed, 0.25), 1)
+    if (phase === 'ready' || phase === 'feedback') {
+      v.currentTime = seg.start
+      void v.play()
+      const loop = window.setInterval(() => { if (v.currentTime >= seg.end - 0.05) v.currentTime = seg.start }, 120)
+      return () => window.clearInterval(loop)
+    }
+    if (phase === 'dancing') {
+      v.currentTime = seg.start
+      void v.play()
+      const stop = window.setInterval(() => { if (v.currentTime >= seg.end - 0.05) v.pause() }, 120)
+      return () => window.clearInterval(stop)
+    }
+    v.pause()
+  }, [phase, videoUrl, speed, seg.start, seg.end])
+
+  const askCoach = async () => {
+    const q = question.trim()
+    if (q.length < 2 || !session.current) return
+    setAsking(true)
+    setCoachAnswer(null)
+    try {
+      const repCtx = result ? { similarity: result.similarity, shape: result.shape, timing: result.timing, dynamics: result.dynamics, top_fault: result.topFault, notes: result.notes, per_count: result.perCount } : null
+      const r = await api<{ answer: string; drill: { drill: Drill; speed: number; reason: string } | null }>(`/api/routines/${routine.id}/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, step_index: stepIndex, rep_context: repCtx }),
+      })
+      setCoachAnswer(r)
+      setQuestion('')
+      void speak(r.answer)
+    } catch {
+      setCoachAnswer({ answer: "I didn't catch that — try again in a moment.", drill: null })
+    } finally {
+      setAsking(false)
+    }
+  }
 
   const start = useCallback(() => {
     const r = ref.current
@@ -315,15 +433,15 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     let worstBone = -1
     let worstErr = 25 // only point an arrow at genuinely wrong limbs
     const colours = BONES.map((_, i) => {
-      if (!mask[i]) return 'rgba(127,216,255,0.15)'
+      if (!mask[i]) return 'rgba(127,216,255,0.12)'
       const a = md?.[i]
       const b = rd[i]
-      if (!a || !b || i >= 8) return 'rgba(127,216,255,0.75)'
+      if (!a || !b || i >= 8) return 'rgba(127,216,255,0.55)'
       const err = angle(a, b)
       if (err > worstErr && c.phase === 'dancing') { worstErr = err; worstBone = i }
-      return err < 15 ? 'rgba(120,255,140,0.9)' : err < 30 ? 'rgba(255,200,60,0.9)' : 'rgba(255,90,90,0.9)'
+      return err < 15 ? 'rgba(120,255,140,0.75)' : err < 30 ? 'rgba(255,200,60,0.75)' : 'rgba(255,90,90,0.8)'
     })
-    drawPose(ctx, rf, at, colours, Math.max(6, at.torso * 0.09))
+    drawBodyGhost(ctx, rf, at, colours)
     // The arrow: from where your limb's tip is to where the routine wants it.
     if (worstBone >= 0 && mine) {
       const [a, b] = BONES[worstBone]
@@ -387,10 +505,18 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           🎤 {persona === 'hype' ? 'Callum (cheeky)' : 'Laura (sassy)'}
         </button>
       </header>
-      <div className="stage">
-        <PoseCam onFrame={onFrame} overlay={overlay} />
-        {countLabel && <div className="countin">{countLabel}</div>}
-        {phase === 'dancing' && <div className="recording">● dancing</div>}
+      <div className="stage-row">
+        <div className="stage">
+          <PoseCam onFrame={onFrame} overlay={overlay} />
+          {countLabel && <div className="countin">{countLabel}</div>}
+          {phase === 'dancing' && <div className="recording">● dancing</div>}
+        </div>
+        {videoUrl && (
+          <div className="refpanel">
+            <video ref={refVideo} src={videoUrl} muted playsInline loop={false} />
+            <span className="notice">The routine (your upload, muted{speed < 1 ? `, at ${Math.min(Math.max(speed, 0.25), 1)}×` : ''})</span>
+          </div>
+        )}
       </div>
 
       {phase === 'loading' && <p className="notice">Loading the routine…</p>}
@@ -400,7 +526,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           <label>
             Speed{' '}
             <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
-              {[0.5, 0.75, 1].map((s) => <option key={s} value={s}>{s}×</option>)}
+              {[0.25, 0.5, 0.75, 1].map((s) => <option key={s} value={s}>{s}×</option>)}
             </select>
           </label>
           <span className="notice">Stand back so your whole body is in frame. The blue ghost shows the move; limbs turn green when you match.</span>
@@ -413,6 +539,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
             <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.dynamics !== null ? ` · energy ${result.dynamics}` : ''}{result.timingBiasMs ? ` · ${Math.abs(result.timingBiasMs)} ms ${result.timingBiasMs > 0 ? 'late' : 'early'}` : ''}</span>
           </div>
           <p className="cue">“{result.cue}”</p>
+          {result.notes.length > 0 && (
+            <ul className="rep-notes">
+              {result.notes.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          )}
           <div className="counts">
             {result.perCount.map((s, k) => (
               <span key={k} className={`count ${s >= 80 ? 'good' : s >= 60 ? 'ok' : 'bad'} ${k + 1 === result.worstCount ? 'worst' : ''}`} title={`count ${k + 1}: ${s}`}>
@@ -429,6 +560,37 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
             <button onClick={() => setPhase('ready')}>Again</button>
             {next && <span className="notice">{next.reason}</span>}
           </div>
+        </div>
+      )}
+      {(phase === 'feedback' || phase === 'ready') && (
+        <div className="ask">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              void askCoach()
+            }}
+          >
+            <input placeholder='Ask the coach — "am I lifting my arm high enough?", "I can&apos;t get the spin"' value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
+            <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
+          </form>
+          {coachAnswer && (
+            <div className="coach-says">
+              <p>🗣️ {coachAnswer.answer}</p>
+              {coachAnswer.drill && (
+                <button
+                  className="primary"
+                  onClick={() => {
+                    setSpeed(coachAnswer.drill!.speed)
+                    setDrill(coachAnswer.drill!.drill)
+                    setCoachAnswer(null)
+                    setPhase('ready')
+                  }}
+                >
+                  Try it: {coachAnswer.drill.speed}× · {DRILL_LABEL[coachAnswer.drill.drill]} — {coachAnswer.drill.reason}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </section>
