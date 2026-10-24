@@ -1,0 +1,509 @@
+# =============================================================================
+# Shadow: dance dataset registry
+# =============================================================================
+# Purpose: tells the project which datasets to use for which style and task.
+#
+# IMPORTANT
+# - Shadow does NOT need these to teach a routine: the uploaded video is always
+#   the reference. These datasets are for: style classification, score
+#   calibration, style-profile tuning, the move-name library, difficulty
+#   estimation, and evaluation.
+# - Most are research-only or non-commercial. Fine for a hackathon prototype;
+#   check each licence before commercial use. Never download YouTube videos
+#   (YouTube terms); use datasets that ship keypoints, or film your own with consent.
+# - verified: true  = page opened and details confirmed (Oct 2026)
+#   verified: false = known/cited but details not confirmed; check before relying on it
+#
+# Fields
+#   id, name, url, styles, modality, size, access, licence, use_for, verified, notes
+#   modality values: video | 2d_keypoints | 3d_keypoints | smpl | mocap | music |
+#                    images | depth | text | labels
+#   use_for values (tasks, see TASKS section at the bottom):
+#     style_classifier | calibration | profile_tuning | move_library |
+#     difficulty | hand_gestures | eval_beats | eval_segmentation |
+#     eval_group_tracking | group_reference | in_the_wild_test | proficiency
+# =============================================================================
+
+datasets:
+
+  # ---------------------------------------------------------------------------
+  # CORE: street / jazz (AIST family)
+  # ---------------------------------------------------------------------------
+  - id: aistpp
+    name: AIST++
+    url: https://google.github.io/aistplusplus_dataset/
+    paper: https://arxiv.org/abs/2101.08779
+    styles: [breaking, popping, locking, middle_hiphop, la_hiphop, house, waacking, krump, street_jazz, ballet_jazz]
+    modality: [3d_keypoints, smpl, 2d_keypoints, music, labels]
+    size: "1,408 sequences, 5.2 h, ~10.1M frames, 30 dancers, 10 genres, 9 views"
+    access: free download (annotations + API code)
+    licence: "API code Apache-2.0; check data terms on the site"
+    use_for: [style_classifier, calibration, profile_tuning, difficulty, eval_beats, move_library]
+    verified: true
+    notes: >
+      Solo, studio, professional dancers only. Contains basic and advanced dances;
+      the same choreography is performed by multiple dancers, which is ideal for
+      expert-vs-expert calibration (d_expert). 17 COCO joints, so no hands or feet detail.
+
+  - id: aist_video_db
+    name: AIST Dance Video Database
+    url: https://aistdancedb.ongaaccel.jp/
+    styles: [breaking, popping, locking, middle_hiphop, la_hiphop, house, waacking, krump, street_jazz, ballet_jazz]
+    modality: [video, music, labels]
+    size: "40 dancers, 10 genres, up to 9 cameras, ~515 GB total; situations include basic, advanced, group, showcase, cypher, battle, moving camera"
+    access: free for research; download subsets only
+    licence: research use; copyright-cleared music
+    use_for: [calibration, eval_segmentation, group_reference, in_the_wild_test]
+    verified: true
+    notes: >
+      Source videos of AIST++. Endo et al. 2024 annotated dance segmentation points
+      on it (https://arxiv.org/abs/2405.19727), which is the eval set for 8-count splitting.
+
+  # ---------------------------------------------------------------------------
+  # Breaking / competition
+  # ---------------------------------------------------------------------------
+  - id: brace
+    name: BRACE (Breakdancing Competition Dataset)
+    url: https://github.com/dmoltisanti/brace
+    paper: https://arxiv.org/abs/2207.10120
+    styles: [breaking]
+    modality: [2d_keypoints, labels, music]
+    size: "~3.5 h, 465 sequences, 81 videos, 64 dancers, 334,538 frames, 1,352 segments"
+    access: keypoints + labels on GitHub; videos are YouTube links (Red Bull copyright)
+    licence: not stated; video copyright Red Bull
+    use_for: [style_classifier, move_library, eval_segmentation, in_the_wild_test]
+    verified: true
+    notes: Red Bull BC One battles. Segment labels toprock / footwork / powermove. Use keypoints, do not download videos.
+
+  # ---------------------------------------------------------------------------
+  # Multi-genre mocap
+  # ---------------------------------------------------------------------------
+  - id: finedance
+    name: FineDance
+    url: https://github.com/THUSIGSICLAB/FineDance
+    styles: [multi_genre_22]   # 22 genres incl. Chinese classical/folk, Korean, popping and others; check repo for the full list
+    modality: [mocap, smpl, music]
+    size: "14.6 h, 346 songs, 27 dancers, 22 genres (≈7.7 h publicly downloadable)"
+    access: Baidu NetDisk (partial); check repo LICENSE
+    licence: see repo LICENSE
+    use_for: [style_classifier, profile_tuning, difficulty]
+    verified: true
+    notes: Includes finger motion. Download can be slow outside China; start early.
+
+  - id: popdanceset
+    name: PopDanceSet (POPDG)
+    url: https://arxiv.org/abs/2405.03178
+    styles: [pop, kpop]
+    modality: [3d_keypoints, smpl, music]
+    size: "3.56 h, 132 dancers, 19 genres"
+    access: research release (see paper for link)
+    licence: research
+    use_for: [style_classifier, profile_tuning]
+    verified: true
+    notes: Popular dance extracted from online videos. Closest open source for K-pop-style profiles.
+
+  - id: motorica_dance
+    name: Motorica Dance
+    url: https://arxiv.org/abs/2211.09707
+    styles: [multi_genre_8]
+    modality: [mocap, music]
+    size: "6.22 h, 1.3M frames, 8 styles"
+    access: released with the "Listen, Denoise, Action!" code
+    licence: not confirmed
+    use_for: [style_classifier, profile_tuning]
+    verified: false
+    notes: High-quality mocap. Confirm download location and licence before use.
+
+  - id: dance_with_melody
+    name: Dance with Melody
+    url: https://hcsi.cs.tsinghua.edu.cn/Paper/Paper18/MM18-TANGTAORAN.pdf
+    styles: [waltz, tango, cha_cha, rumba]
+    modality: [mocap, music]
+    size: "~1.6 h, 4 genres"
+    access: research release
+    licence: research
+    use_for: [style_classifier, profile_tuning]
+    verified: false
+    notes: Ballroom/Latin source. Confirm availability.
+
+  - id: dancedb_ucy
+    name: DanceDB (University of Cyprus)
+    url: https://dancedb.cs.ucy.ac.cy
+    styles: [contemporary, greek_folk, cypriot_folk]
+    modality: [mocap, video, labels]
+    size: "~15 performances (contemporary with emotion labels; traditional folk); growing"
+    access: public download; read the site's copyright statement
+    licence: see site
+    use_for: [style_classifier, profile_tuning]
+    verified: true
+    notes: Also available inside AMASS as SMPL. Contemporary clips carry emotion labels (afraid, angry, excited...).
+
+  - id: dancecamera3d
+    name: DanceCamera3D (DCM)
+    url: https://arxiv.org/abs/2403.13667
+    styles: [multi_genre]
+    modality: [3d_keypoints, music, labels]
+    size: "108 sequences, 3.2 h, dance + music + camera movement"
+    access: research release
+    licence: research
+    use_for: []
+    verified: true
+    notes: Only needed for automatic camera framing in exported videos.
+
+  # ---------------------------------------------------------------------------
+  # Duet / partner (ballroom, latin, folk, classical)
+  # ---------------------------------------------------------------------------
+  - id: dd100
+    name: DD100 (Duolando)
+    url: https://github.com/lisiyao21/Duolando
+    styles: [duet_multi_genre_10]
+    modality: [mocap, smpl, music]
+    size: "~117 min, 10 genres, leader + follower SMPL-X"
+    access: Google Drive link in repo
+    licence: NTU S-Lab License 1.0 (project); confirm it covers the data
+    use_for: [style_classifier, profile_tuning]
+    verified: true
+
+  - id: interdance
+    name: InterDance
+    url: https://inter-dance.github.io/
+    paper: https://arxiv.org/abs/2412.16982
+    styles: [ballroom, latin, folk, classical, street]   # 15 fine-grained genres in 4 categories
+    modality: [mocap, smpl, music]
+    size: "3.93 h, 15 genres, duet with hands (SMPL-X)"
+    access: promised on project page
+    licence: not stated
+    use_for: [style_classifier, profile_tuning]
+    verified: true
+
+  - id: mdd
+    name: MDD (Music + text duet dance)
+    url: https://gprerit96.github.io/mdd-page
+    paper: https://arxiv.org/abs/2508.16911
+    styles: [duet_multi_genre_15]
+    modality: [mocap, music, text]
+    size: "10.34 h, 4.4M frames, 30 dancers, 15 genres, ~10K text descriptions"
+    access: via project page
+    licence: not stated
+    use_for: [profile_tuning, move_library]
+    verified: true
+    notes: Text descriptions help word cues and name moves.
+
+  # ---------------------------------------------------------------------------
+  # Groups / tracking
+  # ---------------------------------------------------------------------------
+  - id: aioz_gdance
+    name: AIOZ-GDANCE
+    url: https://huggingface.co/datasets/aiozai/AIOZ-GDANCE
+    paper: https://arxiv.org/abs/2303.12337
+    styles: [group_multi_genre_7]
+    modality: [video, smpl, music]
+    size: "16.7 h, ~1.8M frames, 4,000+ dancers, 7 styles, 16 music genres, ~12.4 GB"
+    access: Hugging Face direct download (SMPL model needed for meshes)
+    licence: non-commercial research
+    use_for: [eval_group_tracking, group_reference, in_the_wild_test]
+    verified: true
+    notes: Per-dancer root translation gives real floor formations and spacing.
+
+  - id: dancetrack
+    name: DanceTrack
+    url: https://github.com/DanceTrack/DanceTrack
+    paper: https://arxiv.org/abs/2111.14690
+    styles: [group_multi_genre]
+    modality: [video, labels]
+    size: "100 group-dance videos with tracking boxes"
+    access: research download
+    licence: research
+    use_for: [eval_group_tracking]
+    verified: true
+    notes: Dancers look alike and move non-linearly. The benchmark for identity tracking.
+
+  # ---------------------------------------------------------------------------
+  # In-the-wild video (testing on realistic footage)
+  # ---------------------------------------------------------------------------
+  - id: opendance5d
+    name: OpenDance5D
+    url: https://open-dance.github.io
+    paper: https://arxiv.org/abs/2506.07565
+    styles: [multi_genre_14]
+    modality: [video, music, 2d_keypoints, smpl, text]
+    size: "101.7 h, ~41K sequences, 14 genres"
+    access: via project page
+    licence: not stated
+    use_for: [style_classifier, in_the_wild_test]
+    verified: true
+
+  - id: mace_dance
+    name: MACE-Dance
+    url: https://huggingface.co/datasets/GD-ML/MACE-Dance
+    styles: [multi_genre_20plus]
+    modality: [video]
+    size: "~70K clips (5–10 s), ~116 h, 20+ genres"
+    access: Hugging Face, research only
+    licence: research only
+    use_for: [in_the_wild_test]
+    verified: true
+
+  - id: tiktok_dataset
+    name: TikTok Dataset (HDNet)
+    url: https://github.com/yasaminjafarian/HDNet_TikTok
+    styles: [social_dance]
+    modality: [video, labels]
+    size: "~340 single-person dance videos with masks/DensePose"
+    access: project page
+    licence: repo MIT; confirm data terms
+    use_for: [in_the_wild_test]
+    verified: false
+
+  - id: lets_dance
+    name: "Let's Dance"
+    url: https://www.cc.gatech.edu/cpl/projects/dance
+    paper: https://arxiv.org/abs/1801.07388
+    styles: [multi_genre_10]   # +6 added later
+    modality: [video, 2d_keypoints]
+    size: "~1,000 YouTube videos, 10 styles (+6 later), pose JSON + optical flow"
+    access: released for research; some videos removed
+    licence: research
+    use_for: [style_classifier]
+    verified: true
+
+  # ---------------------------------------------------------------------------
+  # Proficiency (beginner vs expert)
+  # ---------------------------------------------------------------------------
+  - id: egoexo4d
+    name: Ego-Exo4D (dance subset)
+    url: https://ego-exo4d-data.org/
+    paper: https://arxiv.org/abs/2311.18259
+    styles: [multi_genre]
+    modality: [video, labels, text]
+    size: "~106.57 h dance (of 1,286 h total); proficiency ratings + expert commentary"
+    access: licence application, approval ~2 days
+    licence: Ego-Exo4D licence
+    use_for: [calibration, proficiency, difficulty]
+    verified: true
+    notes: The main open source of novice-vs-expert dance labels. Apply early.
+
+  # ---------------------------------------------------------------------------
+  # INDIAN CLASSICAL
+  # ---------------------------------------------------------------------------
+  - id: iitkgp_bharatanatyam_adavu
+    name: IIT Kharagpur Bharatanatyam Adavu dataset
+    url: http://hci.cse.iitkgp.ac.in/
+    paper: https://arxiv.org/abs/1909.11023
+    styles: [bharatanatyam]
+    modality: [video, depth, 3d_keypoints, music, labels]
+    size: "58 adavus by 9 dancers (Kinect v1 RGB + depth + skeleton, 30 fps); 23 sollukattu audio recordings; expert key-posture annotations (23 postures for Natta adavus)"
+    access: partly public via the IIT KGP HCI group site
+    licence: research; contact group
+    use_for: [style_classifier, profile_tuning, move_library, eval_segmentation]
+    verified: true
+    notes: >
+      The closest open match to Shadow's model: skeleton + rhythm (sollukattu) +
+      expert key postures. Use it to build the Bharatanatyam profile and to test
+      key-moment detection.
+
+  - id: bharatanatyam_transcription
+    name: Bharatanatyam Dance Transcription (same group)
+    url: https://arxiv.org/abs/2004.11994
+    styles: [bharatanatyam]
+    modality: [3d_keypoints, labels]
+    size: uses the IIT KGP adavu data
+    access: via IIT KGP group
+    licence: research
+    use_for: [move_library]
+    verified: true
+
+  - id: bharatnatyam_adavus_ieee
+    name: Bharatnatyam Adavus (IEEE DataPort, 2024)
+    url: https://ieee-dataport.org/documents/bharatnatyam-adavus
+    styles: [bharatanatyam]
+    modality: [video, labels]
+    size: not stated (videos + adavu mapping by hand gestures, foot posture, movement, complexity)
+    access: IEEE DataPort subscription required
+    licence: IEEE DataPort terms
+    use_for: [style_classifier, move_library, difficulty]
+    verified: true
+
+  - id: bharatanatyam_mudra_cvprw2019
+    name: Comprehensive Bharatanatyam Mudra Dataset
+    url: https://openaccess.thecvf.com/content_CVPRW_2019/html/WiCV/Parameshwaran_Transfer_Learning_for_Classifying_Single_Hand_Gestures_on_Comprehensive_Bharatanatyam_CVPRW_2019_paper.html
+    styles: [bharatanatyam]
+    modality: [images, labels]
+    size: "27 single-hand mudra classes"
+    access: availability not stated; contact authors
+    licence: unknown
+    use_for: [hand_gestures]
+    verified: true
+
+  - id: kathakali_hasta_mudra
+    name: Kathakali Hasta Mudra Dataset
+    url: https://github.com/kavitharaju/KathakaliMudraDataset
+    paper: https://arxiv.org/abs/2404.11205
+    styles: [kathakali, mohiniyattam, kutiyattam]
+    modality: [images, labels]
+    size: "24 mudras, 928 images, 8 participants, with experiment splits"
+    access: public on GitHub
+    licence: see repo
+    use_for: [hand_gestures]
+    verified: true
+
+  - id: kathak_hand_gestures
+    name: Kathak Hand Gestures Dataset
+    url: https://data.mendeley.com/datasets/pr5t257td4
+    styles: [kathak]
+    modality: [images, labels]
+    size: not confirmed
+    access: Mendeley Data
+    licence: see dataset page (Mendeley usually CC BY 4.0)
+    use_for: [hand_gestures]
+    verified: false
+
+  - id: kathak_mudra_ieee
+    name: Kathak Mudra Dataset
+    url: https://ieee-dataport.org/documents/kathak-mudra-dataset
+    styles: [kathak]
+    modality: [images, labels]
+    size: not confirmed
+    access: IEEE DataPort (may need subscription)
+    licence: IEEE DataPort terms
+    use_for: [hand_gestures]
+    verified: false
+
+  - id: indian_dance_forms_images
+    name: Identify the Dance Form (HackerEarth) / Indian Dance Recognition
+    url: https://www.hackerearth.com/problem/machine-learning/identify-the-dance-form-deea77f8
+    alt_url: https://gts.ai/dataset-download/indian-dance-recognition-dataset/
+    styles: [bharatanatyam, kathak, kathakali, kuchipudi, manipuri, mohiniyattam, odissi, sattriya]
+    modality: [images, labels]
+    size: still images labelled by 8 classical forms
+    access: free download
+    licence: see source
+    use_for: [style_classifier]
+    verified: false
+    notes: Images only, so it's weak for movement. Use as a coarse form classifier at most.
+
+  - id: nrityantar
+    name: Nrityantar
+    url: https://arxiv.org/abs/1812.05231
+    styles: [indian_classical]
+    modality: [video, labels]
+    size: not confirmed
+    access: contact authors
+    licence: unknown
+    use_for: [style_classifier]
+    verified: false
+
+  # ---------------------------------------------------------------------------
+  # BOLLYWOOD / DESI FUSION: no open dataset exists. Build your own.
+  # ---------------------------------------------------------------------------
+  - id: shadow_bollywood_own
+    name: Shadow Bollywood / Desi Fusion (team-recorded)
+    url: local://data/own/bollywood
+    styles: [bollywood, desi_fusion, bhangra]
+    modality: [video, 2d_keypoints, music, labels]
+    size: "target: 30–60 min; 3–5 routines + 1 group run + glossary clips"
+    access: private; consent from every dancer
+    licence: team-owned; consent forms stored
+    use_for: [style_classifier, calibration, profile_tuning, move_library, difficulty,
+              eval_segmentation, eval_group_tracking, proficiency]
+    verified: true
+    notes: See OWN_DATA_SPEC below. This is the only Bollywood source; make it well.
+
+# =============================================================================
+# STYLE -> DATASETS (what to train/tune each style profile on)
+# =============================================================================
+styles:
+  bollywood:        {primary: [shadow_bollywood_own], fallback: [], gap: "no open data; hand-set profile, tune with own ratings"}
+  desi_fusion:      {primary: [shadow_bollywood_own], fallback: [], gap: "same as bollywood"}
+  bhangra:          {primary: [shadow_bollywood_own], fallback: [], gap: "no open data"}
+  bharatanatyam:    {primary: [iitkgp_bharatanatyam_adavu], fallback: [bharatnatyam_adavus_ieee, bharatanatyam_transcription], hands: [bharatanatyam_mudra_cvprw2019]}
+  kathak:           {primary: [], fallback: [indian_dance_forms_images], hands: [kathak_hand_gestures, kathak_mudra_ieee], gap: "no open Kathak movement/footwork data; record own; tala timing via audio"}
+  kathakali:        {primary: [], hands: [kathakali_hasta_mudra], gap: "gesture images only"}
+  mohiniyattam:     {primary: [], hands: [kathakali_hasta_mudra], gap: "gesture images only"}
+  odissi:           {primary: [], fallback: [indian_dance_forms_images], gap: "images only"}
+  kuchipudi:        {primary: [], fallback: [indian_dance_forms_images], gap: "images only"}
+  manipuri:         {primary: [], fallback: [indian_dance_forms_images], gap: "images only"}
+  sattriya:         {primary: [], fallback: [indian_dance_forms_images], gap: "images only"}
+  hiphop:           {primary: [aistpp, aist_video_db], fallback: [opendance5d, lets_dance]}
+  breaking:         {primary: [aistpp, brace], fallback: [aist_video_db]}
+  popping:          {primary: [aistpp], fallback: [finedance]}
+  locking:          {primary: [aistpp]}
+  house:            {primary: [aistpp]}
+  waacking:         {primary: [aistpp]}
+  krump:            {primary: [aistpp]}
+  street_jazz:      {primary: [aistpp]}
+  kpop:             {primary: [popdanceset], fallback: [finedance, opendance5d], gap: "no dedicated K-pop set; PopDanceSet closest"}
+  ballet:           {primary: [], fallback: [aistpp], gap: "only AIST++ ballet jazz; no classical ballet mocap verified"}
+  contemporary:     {primary: [dancedb_ucy], fallback: [finedance, opendance5d], gap: "small"}
+  ballroom_latin:   {primary: [dance_with_melody, interdance, dd100], fallback: []}
+  salsa:            {primary: [], fallback: [interdance, dd100], gap: "no dedicated salsa set confirmed"}
+  folk:             {primary: [dancedb_ucy, interdance], fallback: [finedance]}
+  chinese_classical: {primary: [finedance]}
+  general:          {primary: [aistpp, finedance, opendance5d], note: "equal-weight fallback profile"}
+
+# =============================================================================
+# TASKS -> DATASETS (what each model/step is trained or tested on)
+# =============================================================================
+tasks:
+  style_classifier:
+    what: "motion features (per-joint energy, speed spectra, hit density) -> style label"
+    train_on: [aistpp, finedance, popdanceset, brace, interdance, dd100, dancedb_ucy, iitkgp_bharatanatyam_adavu, shadow_bollywood_own]
+    test_on: [opendance5d, lets_dance, held-out dancers of each]
+    note: "hold out dancers, not clips, to avoid leakage"
+  calibration:
+    what: "d_expert (skilled vs skilled, same choreography) and d_novice per style -> 0-100 mapping"
+    train_on: [aistpp, aist_video_db, egoexo4d, shadow_bollywood_own]
+  profile_tuning:
+    what: "which joints carry motion per style -> joint_weights, watched_joints"
+    train_on: [aistpp, finedance, popdanceset, brace, iitkgp_bharatanatyam_adavu, shadow_bollywood_own]
+    note: "then adjust with choreographer judgement + rating study"
+  move_library:
+    what: "labelled move clips for naming via DTW nearest neighbour (names only, never substitution)"
+    train_on: [brace, aistpp, iitkgp_bharatanatyam_adavu, mdd, shadow_bollywood_own]
+  hand_gestures:
+    what: "mudra / hand-shape recogniser on whole-body hand keypoints"
+    train_on: [kathakali_hasta_mudra, kathak_hand_gestures, bharatanatyam_mudra_cvprw2019, kathak_mudra_ieee]
+  difficulty:
+    what: "features -> difficulty, for starting speed and lesson order"
+    train_on: [aistpp, egoexo4d, bharatnatyam_adavus_ieee, shadow_bollywood_own]
+  eval_beats:
+    test_on: [aistpp]
+    metric: "beat / downbeat F-measure within ±70 ms"
+  eval_segmentation:
+    test_on: [aist_video_db, brace, iitkgp_bharatanatyam_adavu, shadow_bollywood_own]
+    metric: "boundary F1 within ±1 beat (Endo et al. annotations for AIST)"
+  eval_group_tracking:
+    test_on: [dancetrack, aioz_gdance, shadow_bollywood_own]
+    metric: "IDF1, HOTA, ID switches per minute"
+  in_the_wild_test:
+    test_on: [aioz_gdance, opendance5d, mace_dance, brace, shadow_bollywood_own]
+  proficiency:
+    test_on: [egoexo4d, shadow_bollywood_own]
+    metric: "AUC: expert-vs-expert distance < expert-vs-novice distance"
+
+# =============================================================================
+# OWN DATA SPEC (Bollywood / Desi fusion, and any style with gaps)
+# =============================================================================
+own_data_spec:
+  consent: "written consent from every dancer (video use, keypoint storage, ratings); parent consent for under-18s"
+  capture:
+    camera: "front-on, chest height (solo) or ~2 m raised (group), ~3 m away, tripod"
+    fps: 60
+    lighting: bright, even
+    clothing: "contrasting to background; varied colours in group runs help identity tracking"
+  content:
+    - "3–5 routines of 1–2 min each"
+    - "same 8-counts danced by experienced members AND beginners (calibration + rating study)"
+    - "1 group run with one dancer deliberately late on 2 known counts (sync test)"
+    - "glossary clips: ~3 s per signature move by the best dancer (thumka, jhatka, chakkar, hand flicks, bhangra bounce...)"
+  labels_per_8_count:
+    - move names per count
+    - hit counts (which counts have accents)
+    - facial-expression moments (for performance-face)
+    - section names
+  ratings_study:
+    raters: "2–3 senior choreographers, blind to app scores"
+    reps: ~30 reps of the same 8-count, mixed skill
+    scale: 1–10
+    target: "Spearman rho >= 0.6 between Shadow similarity and mean rating"
+  storage: "keypoints + labels in repo/data; raw video kept private, not committed"
