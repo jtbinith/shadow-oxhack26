@@ -20,3 +20,7 @@ uploads/
 .DS_Store
 .vscode/
 .idea/
+
+# browser automation snapshots (may contain secrets)
+.playwright-mcp/
+docker-compose.override.yml
