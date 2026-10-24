@@ -97,9 +97,10 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
     let landmarker: PoseLandmarker | undefined
     let hands: HandLandmarker | undefined
     const tracker = new PersonTracker(MAX_PEOPLE)
-    const bodySmooth = new SmootherBank(1.2, 0.05)
-    // Fingers move fast; a higher beta keeps them responsive.
-    const handSmooth = new SmootherBank(1.5, 0.15)
+    // Tuned for dancing: steady when still, follows fast moves with little lag.
+    const bodySmooth = new SmootherBank(1.7, 0.3)
+    // Fingers move fastest; hand points have no visibility score.
+    const handSmooth = new SmootherBank(2.0, 0.6, false)
     let lastVideoTime = -1
     // A small copy of each frame for sampling clothing colours (cheap to read).
     const sample = document.createElement('canvas')

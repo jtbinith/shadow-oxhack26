@@ -1,7 +1,8 @@
 import type { NormalizedLandmark } from '@mediapipe/tasks-vision'
 
 // One Euro filter (Casiez et al. 2012): heavy smoothing when a point is still,
-// light smoothing when it moves fast, so jitter drops without adding lag.
+// light smoothing when it moves fast, so jitter drops without lagging behind dance moves.
+// A higher beta = less lag on fast movement.
 class OneEuro {
   private x: number | null = null
   private dx = 0
@@ -40,10 +41,12 @@ export class SkeletonSmoother {
   private lastTime = 0
   private minCutoff: number
   private beta: number
+  private useVisibility: boolean
 
-  constructor(minCutoff = 1.2, beta = 0.05) {
+  constructor(minCutoff = 1.7, beta = 0.3, useVisibility = true) {
     this.minCutoff = minCutoff
     this.beta = beta
+    this.useVisibility = useVisibility
   }
 
   /** Returns smoothed points; a point that has been missing longer than HOLD_MS gets visibility 0. */
@@ -58,8 +61,9 @@ export class SkeletonSmoother {
         last: null,
         lastSeen: 0,
       })
-      // Hand landmarks carry no visibility score, so treat them as seen.
-      const seen = (p.visibility ?? 1) >= MIN_VISIBILITY
+      // The hand model reports visibility as 0 for every point (it has no such score),
+      // so hands are always treated as seen.
+      const seen = !this.useVisibility || (p.visibility ?? 1) >= MIN_VISIBILITY
       if (seen) {
         s.last = { x: s.fx.filter(p.x, dt), y: s.fy.filter(p.y, dt), z: s.fz.filter(p.z, dt), visibility: 1 }
         s.lastSeen = now
@@ -76,16 +80,18 @@ export class SmootherBank {
   private bank = new Map<string, { s: SkeletonSmoother; used: number }>()
   private minCutoff: number
   private beta: number
+  private useVisibility: boolean
 
-  constructor(minCutoff?: number, beta?: number) {
-    this.minCutoff = minCutoff ?? 1.2
-    this.beta = beta ?? 0.05
+  constructor(minCutoff: number, beta: number, useVisibility = true) {
+    this.minCutoff = minCutoff
+    this.beta = beta
+    this.useVisibility = useVisibility
   }
 
   smooth(key: string, raw: NormalizedLandmark[], now: number): NormalizedLandmark[] {
     let entry = this.bank.get(key)
     if (!entry) {
-      entry = { s: new SkeletonSmoother(this.minCutoff, this.beta), used: now }
+      entry = { s: new SkeletonSmoother(this.minCutoff, this.beta, this.useVisibility), used: now }
       this.bank.set(key, entry)
     }
     entry.used = now
