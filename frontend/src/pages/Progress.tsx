@@ -14,7 +14,7 @@ type Stats = {
 
 const tier = (s: number) => (s >= 1 ? 'gold' : s >= 0.75 ? 'silver' : s >= 0.5 ? 'bronze' : '—')
 
-export default function Progress({ routine, back }: { routine: Routine; back: () => void }) {
+export default function Progress({ routine, back, practise }: { routine: Routine; back: () => void; practise: (stepIndex: number) => void }) {
   const api = useApi()
   const [s, setS] = useState<Stats | null>(null)
   useEffect(() => {
@@ -42,6 +42,24 @@ export default function Progress({ routine, back }: { routine: Routine; back: ()
         <div className="tile"><b>{s.totals.best_score ?? '—'}</b><span>best score</span></div>
         <div className="tile"><b>{s.totals.timing_bias_ms === null ? '—' : `${Math.abs(s.totals.timing_bias_ms)} ms`}</b><span>{(s.totals.timing_bias_ms ?? 0) > 0 ? 'late on average' : 'early on average'}</span></div>
       </div>
+
+      {(() => {
+        // The weakest practised step: lowest average score.
+        const byStep = new Map<number, { sum: number; n: number }>()
+        for (const r of s.recent) {
+          const e = byStep.get(r.step_index) ?? { sum: 0, n: 0 }
+          e.sum += r.similarity
+          e.n++
+          byStep.set(r.step_index, e)
+        }
+        const weakest = [...byStep.entries()].map(([i, e]) => [i, e.sum / e.n] as const).sort((a, b) => a[1] - b[1])[0]
+        return weakest && weakest[1] < 85 ? (
+          <div className="card weakest">
+            <h3>Weakest right now: {label(weakest[0])} (avg {Math.round(weakest[1])})</h3>
+            <button className="primary" onClick={() => practise(weakest[0])}>Practise it now →</button>
+          </div>
+        ) : null
+      })()}
 
       <div className="card">
         <h3>Score, rep by rep</h3>

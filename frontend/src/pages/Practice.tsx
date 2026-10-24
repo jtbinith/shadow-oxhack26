@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
 import { useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, boneMask, normaliseFrame, refFrame, scoreRep, type Drill, type Frame, type RefData, type RepScore, type UserSample } from '../coach/score'
+import { styleCue, styleFor } from '../coach/styles'
 
 type Phase = 'loading' | 'ready' | 'countin' | 'dancing' | 'feedback'
 type Next = { action: 'practise' | 'next_step'; speed?: number; drill?: Drill; reason: string }
 type Reference = { fps: number; start: number; end: number; counts: number[]; points: number[][][] }
 
-const DRILL_LABEL: Record<Drill, string> = { full: 'Full move', freeze: 'Key-pose freezes', arms: 'Arms only', legs: 'Legs only' }
+const DRILL_LABEL: Record<Drill, string> = { full: 'Full move', freeze: 'Key-pose freezes', arms: 'Arms only', legs: 'Legs only', half: 'Toughest half' }
+
+// Mid-rep rescue: if the learner is far off the routine for this long, stop and restart.
+const LOST_AFTER_S = 2.5
+const LOST_COST = 0.55
 
 // Temporary voice: the browser's built-in speech. ElevenLabs/Kokoro cached clips replace this.
 function speak(text: string, rate = 1.05) {
@@ -57,6 +62,27 @@ function drawPose(ctx: CanvasRenderingContext2D, f: Frame, at: { x: number; y: n
   })
 }
 
+function drawArrow(ctx: CanvasRenderingContext2D, fx: number, fy: number, tx: number, ty: number) {
+  const head = 14
+  const ang = Math.atan2(ty - fy, tx - fx)
+  ctx.strokeStyle = '#ffffff'
+  ctx.fillStyle = '#ffffff'
+  ctx.lineWidth = 5
+  ctx.lineCap = 'round'
+  ctx.setLineDash([2, 8])
+  ctx.beginPath()
+  ctx.moveTo(fx, fy)
+  ctx.lineTo(tx, ty)
+  ctx.stroke()
+  ctx.setLineDash([])
+  ctx.beginPath()
+  ctx.moveTo(tx, ty)
+  ctx.lineTo(tx - head * Math.cos(ang - 0.45), ty - head * Math.sin(ang - 0.45))
+  ctx.lineTo(tx - head * Math.cos(ang + 0.45), ty - head * Math.sin(ang + 0.45))
+  ctx.closePath()
+  ctx.fill()
+}
+
 export default function Practice({ routine, stepIndex, step, onExit, onNextStep }: {
   routine: Routine
   stepIndex: number
@@ -74,9 +100,13 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const ref = useRef<RefData | null>(null)
   const session = useRef<string | null>(null)
   const clock = useRef({ start: 0, speed: 1, phase: 'loading' as Phase, drill: 'full' as Drill })
+  // Which half the 'half' drill uses (1 or 2), set from the last result's worst count.
+  const half = useRef<1 | 2 | null>(null)
   const samples = useRef<UserSample[]>([])
   const dancerRef = useRef<Person | undefined>(undefined)
   const audio = useRef<AudioContext | null>(null)
+  const lostSince = useRef<number | null>(null)
+  const style = styleFor(routine.style)
   const replay = useRef<HTMLCanvasElement>(null)
   clock.current.phase = phase
 
@@ -98,14 +128,28 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         hits.push(...(ec?.key_moments ?? []).filter((m) => m.type === 'hit').map((m) => m.t - r.start + offset))
         offset += r.points.length / r.fps
       })
-      ref.current = { frames, fps: refs[0]?.fps ?? 30, counts, hits }
+      let data = { frames, fps: refs[0]?.fps ?? 30, counts, hits }
+      // The "toughest half" drill: only the first or second half of the step's counts.
+      if (drill === 'half') {
+        const mid = counts[Math.floor(counts.length / 2)] ?? 0
+        const useFirst = (half.current ?? 1) === 1
+        const from = useFirst ? 0 : Math.round(mid * data.fps)
+        const to = useFirst ? Math.round(mid * data.fps) : frames.length
+        data = {
+          fps: data.fps,
+          frames: frames.slice(from, to),
+          counts: counts.filter((c) => (useFirst ? c < mid : c >= mid)).map((c) => c - (useFirst ? 0 : mid)),
+          hits: hits.filter((h) => (useFirst ? h < mid : h >= mid)).map((h) => h - (useFirst ? 0 : mid)),
+        }
+      }
+      ref.current = data
       session.current = s.id
       setPhase('ready')
     })().catch(() => !cancelled && setPhase('ready'))
     return () => {
       cancelled = true
     }
-  }, [api, routine, step])
+  }, [api, routine, step, drill])
 
   const start = useCallback(() => {
     const r = ref.current
@@ -135,9 +179,17 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     }, repStartIn * 1000)
   }, [speed, drill])
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(async (lost = false) => {
     const r = ref.current!
-    const score = scoreRep(samples.current, r, drill)
+    const score = scoreRep(samples.current, r, drill, {
+      weights: style.weights,
+      tauMs: style.tauMs,
+      watched: style.watched,
+      vocabulary: (f) => styleCue(style, f),
+    })
+    score.lost = lost
+    if (lost) score.cue = "You got lost — no stress. Let's take it from the top."
+    half.current = score.worstCount <= Math.ceil(score.perCount.length / 2) ? 1 : 2
     setResult(score)
     setPhase('feedback')
     speak(score.cue)
@@ -180,7 +232,29 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         return
       }
       const v = document.querySelector<HTMLVideoElement>('.posecam video')
-      if (me && v) samples.current.push({ t, frame: normaliseFrame(me.body, v.videoWidth, v.videoHeight) as Frame })
+      if (me && v) {
+        const frame = normaliseFrame(me.body, v.videoWidth, v.videoHeight) as Frame
+        samples.current.push({ t, frame })
+        // Completely lost? (way off the routine for a sustained stretch, past the first count)
+        const r = ref.current
+        const j = Math.min(r.frames.length - 1, Math.round(t * r.fps))
+        const ud = frame ? boneDirs(frame) : null
+        const rd = boneDirs(r.frames[j])
+        let cost = 0
+        let n = 0
+        if (ud) ud.forEach((u, b) => { const rb = rd[b]; if (u && rb && b < 8) { cost += 1 - (u[0] * rb[0] + u[1] * rb[1]); n++ } })
+        const off = n >= 4 ? cost / n : 0
+        const firstCount = r.counts[1] ?? 0.5
+        if (t > firstCount && off > LOST_COST) {
+          lostSince.current ??= t
+          if (t - lostSince.current > LOST_AFTER_S) {
+            clock.current.phase = 'feedback'
+            lostSince.current = null
+            void finish(true)
+            return
+          }
+        } else lostSince.current = null
+      }
     },
     [finish],
   )
@@ -206,15 +280,35 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     const mine = me ? normaliseFrame(me.body, w, h) : null
     const md = mine ? boneDirs(mine) : null
     const rd = boneDirs(rf)
+    let worstBone = -1
+    let worstErr = 25 // only point an arrow at genuinely wrong limbs
     const colours = BONES.map((_, i) => {
       if (!mask[i]) return 'rgba(127,216,255,0.15)'
       const a = md?.[i]
       const b = rd[i]
       if (!a || !b || i >= 8) return 'rgba(127,216,255,0.75)'
       const err = angle(a, b)
+      if (err > worstErr && c.phase === 'dancing') { worstErr = err; worstBone = i }
       return err < 15 ? 'rgba(120,255,140,0.9)' : err < 30 ? 'rgba(255,200,60,0.9)' : 'rgba(255,90,90,0.9)'
     })
     drawPose(ctx, rf, at, colours, Math.max(6, at.torso * 0.09))
+    // The arrow: from where your limb's tip is to where the routine wants it.
+    if (worstBone >= 0 && mine) {
+      const [a, b] = BONES[worstBone]
+      const myTip = mine[b]
+      const refA = rf[a]
+      const refB = rf[b]
+      const myRoot = mine[a]
+      if (myTip && myRoot && refA && refB) {
+        // Target: the reference bone re-rooted at YOUR joint, so the arrow shows pure direction change.
+        const tx = at.x + (myRoot[0] + (refB[0] - refA[0])) * at.torso
+        const ty = at.y + (myRoot[1] + (refB[1] - refA[1])) * at.torso
+        const fx = at.x + myTip[0] * at.torso
+        const fy = at.y + myTip[1] * at.torso
+        const len = Math.hypot(tx - fx, ty - fy)
+        if (len > at.torso * 0.18) drawArrow(ctx, fx, fy, tx, ty)
+      }
+    }
   }, [])
 
   // Replay of the worst count: the learner (orange) beside the reference (blue), looping at half speed.
@@ -281,7 +375,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         <div className="feedback">
           <div className="score">
             <span className={`big ${result.similarity >= 80 ? 'pass' : ''}`}>{result.similarity}</span>
-            <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.timingBiasMs ? ` · ${Math.abs(result.timingBiasMs)} ms ${result.timingBiasMs > 0 ? 'late' : 'early'}` : ''}</span>
+            <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.dynamics !== null ? ` · energy ${result.dynamics}` : ''}{result.timingBiasMs ? ` · ${Math.abs(result.timingBiasMs)} ms ${result.timingBiasMs > 0 ? 'late' : 'early'}` : ''}</span>
           </div>
           <p className="cue">“{result.cue}”</p>
           <div className="counts">

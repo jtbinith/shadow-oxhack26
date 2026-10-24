@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApi, type Routine } from '../api'
+import { STYLES } from '../coach/styles'
 
 type Summary = Pick<Routine, 'id' | 'title' | 'status' | 'tempo_bpm' | 'created_at'>
 
@@ -8,6 +9,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
   const [routines, setRoutines] = useState<Summary[] | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [title, setTitle] = useState('')
+  const [style, setStyle] = useState('general')
   const [rights, setRights] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -24,6 +26,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
     const form = new FormData()
     form.append('video', file)
     form.append('title', title || file.name.replace(/\.[^.]+$/, ''))
+    form.append('style', style)
     form.append('rights', String(rights))
     try {
       const r = await api<{ id: string }>('/api/routines', { method: 'POST', body: form })
@@ -52,6 +55,15 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
           <input ref={input} type="file" accept="video/*" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         </div>
         <input className="title" placeholder="Routine name (optional)" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
+        <label className="style-pick">
+          Style{' '}
+          <select value={style} onChange={(e) => setStyle(e.target.value)}>
+            {Object.values(STYLES).map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>{' '}
+          <span className="notice">changes how you're judged and coached, not the steps</span>
+        </label>
         <label className="rights">
           <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} />
           This is my routine, my teacher's, or I'm using it for personal practice. Shadow deletes the audio and video after processing.

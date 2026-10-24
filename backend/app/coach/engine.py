@@ -20,7 +20,7 @@ class Mastery:
 
 def drill_rating(difficulty: float, speed: float, drill: str = "full") -> float:
     """How hard a drill is, on the same scale as the learner's rating."""
-    easier = {"full": 0, "freeze": -250, "arms": -150, "legs": -150}[drill]
+    easier = {"full": 0, "freeze": -250, "arms": -150, "legs": -150, "half": -120}[drill]
     # Calibrated so a new learner (rating 1000) on an average 8-count at 0.5× has ~75% pass chance.
     return 610 + 400 * difficulty + 300 * (speed - 0.5) + easier
 
@@ -73,6 +73,10 @@ def next_drill(difficulty: float, mastery: Mastery, recent: list[Rep], current_s
     # After a breakdown drill that went well, go back to the full move.
     if recent and recent[-1].drill != "full" and recent[-1].score >= 70:
         return {"action": "practise", "speed": 0.5, "drill": "full", "reason": "Nice, now the full move again."}
+
+    # 4+ fails even after a breakdown: drill just half of the 8-count.
+    if len(full) >= 4 and not any(r.passed for r in full[-4:]) and any(r.drill != "full" for r in recent):
+        return {"action": "practise", "speed": 0.5, "drill": "half", "reason": "Just the toughest half for a moment, then we'll stitch it back."}
 
     if len(full) >= 3 and not any(r.passed for r in full[-3:]) and (not recent or recent[-1].drill == "full"):
         fault = full[-1].top_fault or {}

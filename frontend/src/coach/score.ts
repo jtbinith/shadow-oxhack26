@@ -19,7 +19,7 @@ export const BONE_PART = [
 ]
 const ARM_BONES = [0, 1, 2, 3]
 const LEG_BONES = [4, 5, 6, 7]
-export type Drill = 'full' | 'freeze' | 'arms' | 'legs'
+export type Drill = 'full' | 'freeze' | 'arms' | 'legs' | 'half'
 export function boneMask(drill: Drill): boolean[] {
   return BONES.map((_, i) => (drill === 'arms' ? ARM_BONES.includes(i) : drill === 'legs' ? LEG_BONES.includes(i) : true))
 }
@@ -111,16 +111,25 @@ export const toScore = (d: number) => Math.round(100 * Math.min(1, Math.max(0, (
 export type UserSample = { t: number; frame: Frame } // t = time in the reference (seconds from its start)
 export type RefData = { frames: Frame[]; fps: number; counts: number[]; hits: number[] } // counts/hits relative to start
 
-export type Fault = { type: 'shape' | 'late' | 'early'; count: number; body_part?: string; direction?: string; magnitude?: number }
+export type Fault = { type: 'shape' | 'late' | 'early' | 'soft' | 'stiff'; count: number; body_part?: string; direction?: string; magnitude?: number }
 export type RepScore = {
   similarity: number
   shape: number
   timing: number | null
+  dynamics: number | null
   perCount: number[]
   timingBiasMs: number | null
   topFault: Fault | null
   cue: string
   worstCount: number
+  lost?: boolean
+}
+
+export type ScoreOptions = {
+  weights?: { shape: number; timing: number; dynamics: number }
+  tauMs?: number
+  watched?: number[] // bone indexes the style cares most about (boosted in fault ranking)
+  vocabulary?: (f: Fault | null) => string | null // style wording; falls back to the default cue
 }
 
 function speedSeries(frames: Frame[], dt: number[]): number[] {
@@ -139,16 +148,21 @@ export function cueFor(f: Fault | null): string {
   if (!f) return 'Lovely. Again!'
   if (f.type === 'late') return `Hit ${f.count} right on the beat. You're a touch late.`
   if (f.type === 'early') return `Wait for ${f.count}. You're jumping ahead.`
+  if (f.type === 'soft') return `Sharper on ${f.count}. Hit and stop.`
+  if (f.type === 'stiff') return `Smoother through ${f.count}. Let it flow.`
   const part = (f.body_part ?? 'arms').replace('_', ' ')
   return `${part[0].toUpperCase()}${part.slice(1)} ${f.direction ?? 'sharper'} on ${f.count}.`
 }
 
-export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'): RepScore {
+export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full', opts: ScoreOptions = {}): RepScore {
+  const weights = opts.weights ?? { shape: 0.7, timing: 0.3, dynamics: 0 }
+  const tau = opts.tauMs ?? 100
+  const watched = new Set(opts.watched ?? [])
   const mask = boneMask(drill)
   const refDirs = ref.frames.map(boneDirs)
   const usable = user.filter((u) => u.frame)
   if (usable.length < 5) {
-    return { similarity: 0, shape: 0, timing: null, perCount: ref.counts.map(() => 0), timingBiasMs: null, topFault: null, cue: 'Step back so I can see your whole body.', worstCount: 1 }
+    return { similarity: 0, shape: 0, timing: null, dynamics: null, perCount: ref.counts.map(() => 0), timingBiasMs: null, topFault: null, cue: 'Step back so I can see your whole body.', worstCount: 1 }
   }
   const userDirs = usable.map((u) => boneDirs(u.frame))
 
@@ -198,13 +212,49 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
     let best = -1
     let bestErr = 0
     errs.forEach((e, b) => {
-      const mean = e.n ? e.sum / e.n : 0
+      let mean = e.n ? e.sum / e.n : 0
+      if (watched.has(b)) mean *= 1.5 // this style watches these bones hardest
       if (b < 8 && mean > bestErr) { bestErr = mean; best = b }
     })
     if (best >= 0 && bestErr > 20) {
       const e = errs[best]
       shapeFault = { type: 'shape', count: worst + 1, body_part: BONE_PART[best], direction: e.dy < 0 ? 'higher' : 'lower', magnitude: Math.round(bestErr) }
     }
+  }
+
+  // Dynamics: does your energy rise and fall where the routine's does (sharp hits, smooth flows)?
+  let dynamics: number | null = null
+  let dynFault: Fault | null = null
+  if (drill !== 'freeze' && usable.length >= 10) {
+    const udts = usable.map((u, i) => (i ? u.t - usable[i - 1].t : 0))
+    const uSpeed = speedSeries(usable.map((u) => u.frame), udts)
+    const rSpeed = speedSeries(ref.frames, ref.frames.map(() => 1 / ref.fps))
+    // Correlate the speed envelopes along the DTW path.
+    const pairs = pathPairs.filter(([i, j]) => i < uSpeed.length && j < rSpeed.length)
+    const mu = pairs.reduce((s, [i]) => s + uSpeed[i], 0) / pairs.length
+    const mr = pairs.reduce((s, [, j]) => s + rSpeed[j], 0) / pairs.length
+    let num = 0, du = 0, dr = 0
+    for (const [i, j] of pairs) {
+      num += (uSpeed[i] - mu) * (rSpeed[j] - mr)
+      du += (uSpeed[i] - mu) ** 2
+      dr += (rSpeed[j] - mr) ** 2
+    }
+    const corr = du > 1e-6 && dr > 1e-6 ? num / Math.sqrt(du * dr) : 0
+    // Sharpness: your energy at the routine's hits, relative to the routine's.
+    let ratioSum = 0, ratioN = 0, worstHitCount = 1
+    for (const h of ref.hits) {
+      const j = Math.min(rSpeed.length - 1, Math.round(h * ref.fps))
+      const near = pairs.filter(([, pj]) => Math.abs(pj - j) <= 3)
+      if (!near.length || rSpeed[j] < 1e-3) continue
+      const u = Math.max(...near.map(([i]) => uSpeed[i]))
+      ratioSum += u / rSpeed[j]
+      ratioN++
+      if (u / rSpeed[j] < 0.6) worstHitCount = Math.max(1, ref.counts.findIndex((c) => c > h))
+    }
+    const ratio = ratioN ? ratioSum / ratioN : 1
+    dynamics = Math.round(100 * Math.max(0, Math.min(1, 0.6 * (corr + 1) / 2 + 0.4 * Math.min(1, ratio / 0.8))))
+    if (ratioN && ratio < 0.6) dynFault = { type: 'soft', count: worstHitCount, magnitude: Math.round(100 * ratio) }
+    else if (ratioN && ratio > 1.7) dynFault = { type: 'stiff', count: worstHitCount, magnitude: Math.round(100 * ratio) }
   }
 
   // Timing: for each reference hit, the nearest user speed peak within ±250 ms.
@@ -224,7 +274,6 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
       }
       if (bestK >= 0) offsets.push((ut[bestK] - h) * 1000)
     }
-    const tau = 100
     timing = Math.round((100 * offsets.reduce((s, o) => s + Math.exp(-Math.abs(o) / tau), 0)) / ref.hits.length)
     if (offsets.length) {
       bias = Math.round(offsets.reduce((a, b) => a + b, 0) / offsets.length)
@@ -237,7 +286,19 @@ export function scoreRep(user: UserSample[], ref: RefData, drill: Drill = 'full'
   }
 
   const shape = toScore(shapeDist)
-  const similarity = Math.round(timing === null ? shape : 0.7 * shape + 0.3 * timing)
-  const topFault = timingFault && (timing ?? 100) < shape ? timingFault : shapeFault ?? timingFault
-  return { similarity, shape, timing, perCount, timingBiasMs: bias, topFault, cue: cueFor(topFault), worstCount: worst + 1 }
+  // Blend by the style's weights, renormalised over the components we could measure.
+  const parts: [number, number][] = [[weights.shape, shape]]
+  if (timing !== null) parts.push([weights.timing, timing])
+  if (dynamics !== null) parts.push([weights.dynamics, dynamics])
+  const wsum = parts.reduce((s, [w]) => s + w, 0)
+  const similarity = Math.round(parts.reduce((s, [w, v]) => s + (w / wsum) * v, 0))
+  // Fault ranking: the component that lost the most points wins.
+  const candidates: [number, Fault | null][] = [
+    [shape, shapeFault],
+    [timing ?? 100, timingFault],
+    [dynamics ?? 100, dynFault],
+  ]
+  const topFault = candidates.filter(([, f]) => f).sort((a, b) => a[0] - b[0])[0]?.[1] ?? null
+  const cue = opts.vocabulary?.(topFault) ?? cueFor(topFault)
+  return { similarity, shape, timing, dynamics, perCount, timingBiasMs: bias, topFault, cue, worstCount: worst + 1 }
 }

@@ -14,6 +14,8 @@ from ..pipeline.run import process
 
 router = APIRouter(prefix="/api", tags=["routines"])
 
+STYLES = {"general", "bollywood", "hiphop", "kpop", "contemporary", "bharatanatyam"}
+
 
 def _pool():
     if db.pool is None:
@@ -31,6 +33,7 @@ async def upload_routine(
     background: BackgroundTasks,
     video: UploadFile = File(...),
     title: str = Form("My routine", max_length=80),
+    style: str = Form("general", max_length=30),
     rights: bool = Form(...),
     user_id: str = User,
 ) -> dict:
@@ -60,8 +63,8 @@ async def upload_routine(
 
     with pool.connection() as c:
         routine_id = c.execute(
-            "INSERT INTO routines (user_id, title, stages) VALUES (%s, %s, '[{\"stage\": \"received\"}]') RETURNING id",
-            (user_id, title.strip() or "My routine"),
+            "INSERT INTO routines (user_id, title, style, stages) VALUES (%s, %s, %s, '[{\"stage\": \"received\"}]') RETURNING id",
+            (user_id, title.strip() or "My routine", style if style in STYLES else "general"),
         ).fetchone()[0]
     background.add_task(process, str(routine_id), tmp, user_id)
     return {"id": str(routine_id), "status": "processing"}
@@ -77,7 +80,7 @@ def my_usage(user_id: str = User) -> dict:
 def list_routines(user_id: str = User) -> list[dict]:
     with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
         rows = c.execute(
-            "SELECT id, title, status, tempo_bpm, created_at FROM routines WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
+            "SELECT id, title, status, style, tempo_bpm, created_at FROM routines WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
             (user_id,),
         ).fetchall()
     return [{**r, "id": str(r["id"])} for r in rows]
@@ -87,7 +90,7 @@ def list_routines(user_id: str = User) -> list[dict]:
 def get_routine(routine_id: str, user_id: str = User) -> dict:
     with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
         r = c.execute(
-            """SELECT id, title, status, error, stages, tempo_bpm, beats, downbeats, lesson_plan, duration_s, beat_source, created_at
+            """SELECT id, title, status, style, error, stages, tempo_bpm, beats, downbeats, lesson_plan, duration_s, beat_source, created_at
                FROM routines WHERE id = %s AND user_id = %s""",
             (routine_id, user_id),
         ).fetchone()

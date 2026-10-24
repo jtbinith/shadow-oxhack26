@@ -78,6 +78,16 @@ function RoutineView({ id }: { id: string }) {
       />
     )
   }
-  if (showProgress) return <ProgressPage routine={routine} back={() => setShowProgress(false)} />
+  if (showProgress)
+    return (
+      <ProgressPage
+        routine={routine}
+        back={() => setShowProgress(false)}
+        practise={(i) => {
+          setShowProgress(false)
+          setPractising(i)
+        }}
+      />
+    )
   return <LessonTree routine={routine} practise={setPractising} showProgress={() => setShowProgress(true)} replanned={() => setReload((n) => n + 1)} />
 }

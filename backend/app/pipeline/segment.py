@@ -44,13 +44,35 @@ def analyse(norm: np.ndarray, fps: float, counts: list[dict]) -> list[dict]:
                 if sigs[j] is not None and out[j]["repeat_of"] is None and _distance(sigs[i], sigs[j]) < REPEAT_DISTANCE:
                     repeat_of = j
                     break
-        moments = key_moments(seg_speed, fps, c)
+        seg_norm = _slice(norm, fps, c["start"], c["end"])
+        moments = key_moments(seg_speed, fps, c) + turns(seg_norm, fps, c)
         hits = sum(1 for m in moments if m["type"] == "hit")
         seg_mean = float(np.nanmean(seg_speed)) if len(seg_speed) and np.isfinite(seg_speed).any() else 0.0
         difficulty = float(np.clip(0.5 * seg_mean / (mean_speed or 1) + 0.08 * hits, 0, 1))
         visible = float(np.isfinite(_slice(norm, fps, c["start"], c["end"])[..., 0]).mean()) if seg_speed.size else 0.0
         out.append({**c, "index": i, "repeat_of": repeat_of, "key_moments": moments, "difficulty": round(difficulty, 2), "visible": round(visible, 2)})
     return out
+
+
+def turns(seg: np.ndarray, fps: float, c: dict) -> list[dict]:
+    """A turn: the shoulder line collapses (side-on) or its left/right order flips (back-to-front)."""
+    if len(seg) < 5:
+        return []
+    width = seg[:, 12, 0] - seg[:, 11, 0]  # right minus left shoulder x, torso units
+    out = []
+    typical = np.nanmedian(np.abs(width)) or 1.0
+    k = 1
+    while k < len(width):
+        flipped = np.sign(width[k]) != np.sign(width[k - 1]) and abs(width[k - 1]) > 0.15 * typical
+        collapsed = abs(width[k]) < 0.25 * typical <= abs(width[k - 1])
+        if flipped or collapsed:
+            t = c["start"] + k / fps
+            count = int(np.argmin([abs(t - ct) for ct in c["counts"]])) + 1
+            if not out or t - out[-1]["t"] > 0.4:
+                out.append({"type": "turn", "count": count, "t": round(t, 3)})
+            k += int(0.4 * fps)
+        k += 1
+    return out[:4]
 
 
 def key_moments(seg_speed: np.ndarray, fps: float, c: dict) -> list[dict]:

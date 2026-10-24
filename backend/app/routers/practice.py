@@ -26,7 +26,7 @@ class RepIn(BaseModel):
     step_index: int = Field(ge=0)
     eight_counts: list[int] = Field(min_length=1, max_length=32)
     speed: float = Field(ge=0.25, le=1.0)
-    drill: str = Field(default="full", pattern="^(full|freeze|arms|legs)$")
+    drill: str = Field(default="full", pattern="^(full|freeze|arms|legs|half)$")
     similarity: float = Field(ge=0, le=100)
     shape: float | None = Field(default=None, ge=0, le=100)
     timing: float | None = Field(default=None, ge=0, le=100)

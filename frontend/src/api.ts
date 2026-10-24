@@ -15,6 +15,7 @@ export type EightCount = {
 export type Routine = {
   id: string
   title: string
+  style?: string
   status: 'processing' | 'ready' | 'failed'
   error?: string | null
   stages: Stage[]
