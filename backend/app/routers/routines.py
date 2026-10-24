@@ -97,7 +97,7 @@ def get_routine(routine_id: str, user_id: str = User) -> dict:
         if not r:
             raise HTTPException(404, "Routine not found")
         ecs = c.execute(
-            "SELECT idx, start_s, end_s, count_times, repeat_of, key_moments, difficulty FROM eight_counts WHERE routine_id = %s ORDER BY idx",
+            "SELECT idx, start_s, end_s, count_times, repeat_of, key_moments, difficulty, moves, name FROM eight_counts WHERE routine_id = %s ORDER BY idx",
             (routine_id,),
         ).fetchall()
     return {**r, "id": str(r["id"]), "eight_counts": ecs}

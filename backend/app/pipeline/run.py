@@ -10,7 +10,7 @@ import numpy as np
 
 from .. import db
 from ..agent import plan as lesson_plan
-from . import audio, features, media, pose, segment
+from . import audio, features, media, moves, pose, segment
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
         world = features.fill_gaps(raw["world"])
         counts = audio.eight_counts(grid["downbeats"], info["duration"])
         analysed = segment.analyse(norm, raw["fps"], counts)
+        for e in analysed:
+            e["moves"] = moves.name_counts(norm, raw["fps"], e)
+            e["name"] = moves.summary(e["moves"])
         repeats = sum(1 for e in analysed if e["repeat_of"] is not None)
         _stage(routine_id, "segmented", eight_counts=len(analysed), repeats=repeats)
 
@@ -72,9 +75,9 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
             for e in analysed:
                 a, b = int(e["start"] * fps), int(e["end"] * fps)
                 c.execute(
-                    """INSERT INTO eight_counts (routine_id, idx, start_s, end_s, count_times, repeat_of, key_moments, difficulty, reference)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                    (routine_id, e["index"], e["start"], e["end"], e["counts"], e["repeat_of"], json.dumps(e["key_moments"]), e["difficulty"], _reference_bytes(norm[a:b], world[a:b])),
+                    """INSERT INTO eight_counts (routine_id, idx, start_s, end_s, count_times, repeat_of, key_moments, difficulty, reference, moves, name)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (routine_id, e["index"], e["start"], e["end"], e["counts"], e["repeat_of"], json.dumps(e["key_moments"]), e["difficulty"], _reference_bytes(norm[a:b], world[a:b]), json.dumps(e["moves"]), e["name"]),
                 )
             c.execute(
                 """UPDATE routines SET status = 'ready', tempo_bpm = %s, beats = %s, downbeats = %s, fingerprint = %s,

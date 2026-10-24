@@ -186,6 +186,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const [next, setNext] = useState<Next | null>(null)
   const [habit, setHabit] = useState<string | null>(null)
   const [countLabel, setCountLabel] = useState('')
+  // The move called on each count of the reference ("Arms up", "Step right"), parallel to its counts.
+  const moveNames = useRef<string[]>([])
+  const [calling, setCalling] = useState<{ count: number; name: string } | null>(null)
   const ref = useRef<RefData | null>(null)
   const session = useRef<string | null>(null)
   const clock = useRef({ start: 0, speed: 1, phase: 'loading' as Phase, drill: 'full' as Drill })
@@ -243,11 +246,13 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       const frames: Frame[] = []
       const counts: number[] = []
       const hits: number[] = []
+      const names: string[] = []
       let offset = 0
       refs.forEach((r, k) => {
         frames.push(...r.points.map(refFrame))
         counts.push(...r.counts.map((c) => c - r.start + offset))
         const ec = routine.eight_counts.find((e) => e.idx === step.eight_counts[k])
+        names.push(...r.counts.map((_, j) => ec?.moves?.[j]?.name ?? ''))
         hits.push(...(ec?.key_moments ?? []).filter((m) => m.type === 'hit').map((m) => m.t - r.start + offset))
         offset += r.points.length / r.fps
       })
@@ -264,6 +269,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           counts: counts.filter((c) => (useFirst ? c < mid : c >= mid)).map((c) => c - (useFirst ? 0 : mid)),
           hits: hits.filter((h) => (useFirst ? h < mid : h >= mid)).map((h) => h - (useFirst ? 0 : mid)),
         }
+        moveNames.current = names.filter((_, j) => (useFirst ? counts[j] < mid : counts[j] >= mid))
+      } else {
+        moveNames.current = names
       }
       ref.current = data
       session.current = s.id
@@ -293,6 +301,24 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     }
     v.pause()
   }, [phase, videoUrl, speed, seg.start, seg.end])
+
+  // Call the moves like a teacher would: the current count and its move, during the rep.
+  useEffect(() => {
+    if (phase !== 'dancing') {
+      setCalling(null)
+      return
+    }
+    const id = window.setInterval(() => {
+      const r = ref.current
+      if (!r) return
+      const t = ((performance.now() - clock.current.start) / 1000) * clock.current.speed
+      let k = -1
+      while (k + 1 < r.counts.length && r.counts[k + 1] <= t + 0.05) k++
+      if (k < 0) return
+      setCalling((c) => (c && c.count === k ? c : { count: k, name: moveNames.current[k] ?? '' }))
+    }, 60)
+    return () => window.clearInterval(id)
+  }, [phase])
 
   const askCoach = async (spoken?: string) => {
     const q = (spoken ?? question).trim()
@@ -556,6 +582,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           <PoseCam onFrame={onFrame} overlay={overlay} />
           {countLabel && <div className="countin">{countLabel}</div>}
           {phase === 'dancing' && <div className="recording">● dancing</div>}
+          {calling && (
+            <div className="caller">
+              <b>{(calling.count % 8) + 1}</b> {calling.name}
+            </div>
+          )}
         </div>
         {videoUrl && (
           <div className="refpanel">
@@ -566,6 +597,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       </div>
 
       {phase === 'loading' && <p className="notice">Loading the routine…</p>}
+      {phase === 'ready' && step.eight_counts.length === 1 && (() => {
+        const ms = routine.eight_counts.find((e) => e.idx === step.eight_counts[0])?.moves
+        return ms?.length ? (
+          <ol className="movelist" aria-label="The moves">
+            {ms.map((m) => <li key={m.count}><b>{m.count}</b>{m.name}</li>)}
+          </ol>
+        ) : null
+      })()}
       {phase === 'ready' && (
         <div className="controls">
           <button className="primary" onClick={start}>Start ({speed}×)</button>

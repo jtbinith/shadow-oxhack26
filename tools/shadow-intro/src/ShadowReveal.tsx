@@ -86,8 +86,8 @@ export const ShadowReveal: React.FC = () => {
             top: centerY - WALKER_HEIGHT / 2,
             width: WALKER_WIDTH,
             height: WALKER_HEIGHT,
-            // The source walks right; mirror the left-hand walker
-            transform: `scaleX(${direction})`,
+            // The source faces right; mirror it so each walker faces the centre as it moves out
+            transform: `scaleX(${-direction})`,
           }}
         >
           <Gif

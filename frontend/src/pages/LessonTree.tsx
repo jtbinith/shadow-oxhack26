@@ -14,6 +14,10 @@ function label(step: Step) {
   return step.type === 'chain' ? `Checkpoint ${n.join('+')}` : `8-count ${n[0]}`
 }
 
+function moveName(routine: Routine, step: Step) {
+  return routine.eight_counts.find((e) => e.idx === step.eight_counts[0])?.name ?? null
+}
+
 // A Duolingo-style path: a step unlocks when the one before it has been passed at any speed;
 // bronze / silver / gold = passed at 0.5× / 0.75× / 1×.
 export default function LessonTree({ routine, practise, showProgress, replanned }: {
@@ -88,6 +92,7 @@ export default function LessonTree({ routine, practise, showProgress, replanned 
             <li key={i} className={`node ${s.type} ${locked ? 'locked' : 'open'}`} style={{ marginLeft: `${(Math.sin(i * 0.9) + 1) * 22}%` }}>
               <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Pass the step before to unlock' : 'Practise'}>
                 <span className="node-label">{label(s)}</span>
+                {s.type === 'learn' && moveName(routine, s) && <span className="node-moves">{moveName(routine, s)}</span>}
                 <span className="tiers">
                   {TIERS.map((t) => (
                     <span key={t.name} className={`tier ${t.name} ${best >= t.speed ? 'earned' : ''}`} title={`${t.name}: pass at ${t.speed}×`} />

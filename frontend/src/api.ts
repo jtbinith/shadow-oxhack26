@@ -11,6 +11,8 @@ export type EightCount = {
   repeat_of: number | null
   key_moments: { type: 'hit' | 'freeze'; count: number; t: number }[]
   difficulty: number
+  moves?: { count: number; name: string }[] | null
+  name?: string | null
 }
 export type Routine = {
   id: string
