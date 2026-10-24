@@ -1,8 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
-import { DrawingUtils, FilesetResolver, HandLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision'
+import { DrawingUtils, FilesetResolver, HandLandmarker, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision'
 
-export type Landmark = { x: number; y: number; z: number }
-export type Frame = { body: Landmark[]; hands: { side: string; points: Landmark[] }[] }
+export type Landmark = NormalizedLandmark
+export type Hand = { side: string; points: Landmark[] }
+export type Person = { body: Landmark[]; hands: Hand[] }
+export type Frame = { people: Person[] }
+
+const MAX_PEOPLE = 6
+const COLOURS = ['#ffb347', '#ff6fb5', '#9cff6f', '#c58bff', '#ffe066', '#6fffe0']
+const L_WRIST = 15
+const R_WRIST = 16
+
+// Give each detected hand to the person whose wrist is closest to it.
+function assignHands(bodies: Landmark[][], hands: Hand[]): Person[] {
+  const people: Person[] = bodies.map((body) => ({ body, hands: [] }))
+  for (const hand of hands) {
+    const w = hand.points[0]
+    let best = -1
+    let bestDist = Infinity
+    bodies.forEach((b, i) => {
+      for (const j of [L_WRIST, R_WRIST]) {
+        const d = Math.hypot(b[j].x - w.x, b[j].y - w.y)
+        if (d < bestDist) {
+          bestDist = d
+          best = i
+        }
+      }
+    })
+    if (best >= 0 && bestDist < 0.15) people[best].hands.push(hand)
+  }
+  return people
+}
 
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
 const POSE_MODEL =
@@ -10,7 +38,7 @@ const POSE_MODEL =
 const HAND_MODEL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task'
 
-// Mirrored webcam with the live body (33 points) and hands (21 points each) drawn on top.
+// Mirrored webcam with every person's body (33 points) and hands (21 points each) drawn on top.
 // Only keypoints ever leave this component.
 export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void }) {
   const video = useRef<HTMLVideoElement>(null)
@@ -35,12 +63,12 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
           PoseLandmarker.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: POSE_MODEL, delegate: 'GPU' },
             runningMode: 'VIDEO',
-            numPoses: 1,
+            numPoses: MAX_PEOPLE,
           }),
           HandLandmarker.createFromOptions(fileset, {
             baseOptions: { modelAssetPath: HAND_MODEL, delegate: 'GPU' },
             runningMode: 'VIDEO',
-            numHands: 2,
+            numHands: MAX_PEOPLE * 2,
           }),
         ])
         setStatus('')
@@ -55,23 +83,23 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const body = landmarker.detectForVideo(v, now)
             const hand = hands.detectForVideo(v, now)
             ctx.clearRect(0, 0, v.videoWidth, v.videoHeight)
-            for (const lm of body.landmarks) {
-              draw.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: '#ffb347', lineWidth: 4 })
-              draw.drawLandmarks(lm, { color: '#fff', radius: 3 })
-            }
-            for (const lm of hand.landmarks) {
-              draw.drawConnectors(lm, HandLandmarker.HAND_CONNECTIONS, { color: '#7fd8ff', lineWidth: 2 })
-              draw.drawLandmarks(lm, { color: '#fff', radius: 2 })
-            }
-            if (body.landmarks[0]) {
-              onFrame?.({
-                body: body.landmarks[0],
-                hands: hand.landmarks.map((points, i) => ({
-                  side: hand.handedness[i]?.[0]?.categoryName ?? 'Unknown',
-                  points,
-                })),
-              })
-            }
+            const people = assignHands(
+              body.landmarks,
+              hand.landmarks.map((points, i) => ({
+                side: hand.handedness[i]?.[0]?.categoryName ?? 'Unknown',
+                points,
+              })),
+            )
+            people.forEach((person, i) => {
+              const colour = COLOURS[i % COLOURS.length]
+              draw.drawConnectors(person.body, PoseLandmarker.POSE_CONNECTIONS, { color: colour, lineWidth: 4 })
+              draw.drawLandmarks(person.body, { color: '#fff', radius: 3 })
+              for (const h of person.hands) {
+                draw.drawConnectors(h.points, HandLandmarker.HAND_CONNECTIONS, { color: colour, lineWidth: 2 })
+                draw.drawLandmarks(h.points, { color: '#fff', radius: 2 })
+              }
+            })
+            if (people.length) onFrame?.({ people })
           }
           raf = requestAnimationFrame(loop)
         }
