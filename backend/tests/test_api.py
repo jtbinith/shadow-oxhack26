@@ -53,6 +53,6 @@ def test_test_bypass_is_off_by_default():
 
 
 def test_publishable_key_decodes_to_frontend_api(monkeypatch):
-    domain = base64.b64encode(b"smiling-pika-5924.clerk.accounts.dev$").decode().rstrip("=")
+    domain = base64.b64encode(b"example-app-123.clerk.accounts.dev$").decode().rstrip("=")
     monkeypatch.setattr(settings, "clerk_publishable_key", f"pk_test_{domain}")
-    assert auth._frontend_api() == "smiling-pika-5924.clerk.accounts.dev"
+    assert auth._frontend_api() == "example-app-123.clerk.accounts.dev"
