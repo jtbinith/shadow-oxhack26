@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
+import { useAuth } from '@clerk/clerk-react'
 import { useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, boneMask, normaliseFrame, refFrame, scoreRep, type Drill, type Frame, type RefData, type RepScore, type UserSample } from '../coach/score'
 import { styleCue, styleFor } from '../coach/styles'
@@ -14,13 +15,39 @@ const DRILL_LABEL: Record<Drill, string> = { full: 'Full move', freeze: 'Key-pos
 const LOST_AFTER_S = 2.5
 const LOST_COST = 0.55
 
-// Temporary voice: the browser's built-in speech. ElevenLabs/Kokoro cached clips replace this.
-function speak(text: string, rate = 1.05) {
+// The coach's voice: ElevenLabs audio (cached twice — server-side per line, and as object
+// URLs here), falling back to the browser's built-in speech when it's unavailable.
+const clipCache = new Map<string, string>()
+
+function speakFallback(text: string, rate = 1.05) {
   if (!('speechSynthesis' in window)) return
   window.speechSynthesis.cancel()
   const u = new SpeechSynthesisUtterance(text)
   u.rate = rate
   window.speechSynthesis.speak(u)
+}
+
+function makeSpeak(getToken: () => Promise<string | null>, persona: () => string) {
+  return async (text: string, rate = 1.05) => {
+    const key = `${persona()}|${text}`
+    try {
+      let url = clipCache.get(key)
+      if (!url) {
+        const token = await getToken()
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ text, persona: persona() }),
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        url = URL.createObjectURL(await res.blob())
+        clipCache.set(key, url)
+      }
+      await new Audio(url).play()
+    } catch {
+      speakFallback(text, rate)
+    }
+  }
 }
 
 function click(ac: AudioContext, at: number, accent: boolean) {
@@ -107,6 +134,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const audio = useRef<AudioContext | null>(null)
   const lostSince = useRef<number | null>(null)
   const style = styleFor(routine.style)
+  const { getToken } = useAuth()
+  const [persona, setPersona] = useState<'calm' | 'hype'>('hype')
+  const personaRef = useRef(persona)
+  personaRef.current = persona
+  const speak = useRef(makeSpeak(getToken, () => personaRef.current)).current
   const replay = useRef<HTMLCanvasElement>(null)
   clock.current.phase = phase
 
@@ -162,7 +194,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       click(ac, t0 + k * beat, k === 0)
       window.setTimeout(() => {
         setCountLabel(n)
-        speak(n, 1.3)
+        speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
       }, (0.3 + k * beat) * 1000)
     })
     const repStartIn = 0.3 + 4 * beat
@@ -192,7 +224,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     half.current = score.worstCount <= Math.ceil(score.perCount.length / 2) ? 1 : 2
     setResult(score)
     setPhase('feedback')
-    speak(score.cue)
+    void speak(score.cue)
     if (!session.current) return
     try {
       const res = await api<{ passed: boolean; next: Next }>(`/api/routines/${routine.id}/sessions/${session.current}/reps`, {
@@ -351,6 +383,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         <button className="link" onClick={onExit}>← Lesson tree</button>
         <h2>{title}</h2>
         <span className="chip">{speed}× · {DRILL_LABEL[drill]}</span>
+        <button className="chip persona" onClick={() => setPersona((p) => (p === 'hype' ? 'calm' : 'hype'))} title="Switch coach voice">
+          🎤 {persona === 'hype' ? 'Callum (cheeky)' : 'Laura (sassy)'}
+        </button>
       </header>
       <div className="stage">
         <PoseCam onFrame={onFrame} overlay={overlay} />

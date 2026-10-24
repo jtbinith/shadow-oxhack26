@@ -1,0 +1,19 @@
+{
+  "name": "shadow-intro",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "render": "remotion render src/index.ts ShadowReveal out/shadow.mp4",
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.228",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.228"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  }
+}

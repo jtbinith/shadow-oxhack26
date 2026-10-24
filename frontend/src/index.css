@@ -126,3 +126,4 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .style-pick { display: block; margin-bottom: 1rem; }
 .style-pick select { background: #0f0d15; color: var(--ink); border: 1px solid #3a3448; border-radius: 8px; padding: 0.4rem; }
 .weakest { border-color: var(--spot); margin-bottom: 1rem; }
+.persona { cursor: pointer; border: 1px solid #3a3448; background: #17141f; color: var(--ink); }

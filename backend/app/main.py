@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import db
 from .config import settings
-from .routers import practice, routines
+from .routers import practice, routines, tts
 
 
 @asynccontextmanager
@@ -19,6 +19,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Shadow", lifespan=lifespan)
 app.include_router(routines.router)
 app.include_router(practice.router)
+app.include_router(tts.router)
 
 
 @app.get("/api/health")

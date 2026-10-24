@@ -8,10 +8,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model_fast: str = "gemini-3.5-flash-lite"
     gemini_model_strong: str = "gemini-4-argon"
-    # Coach voice: Kokoro-82M (open source, runs on CPU in the same container).
-    tts_backend: str = "kokoro"
-    tts_voice_calm: str = "af_heart"
-    tts_voice_hype: str = "am_puck"
+    # Coach voice: ElevenLabs, cached per line; the browser's voice is the fallback.
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id_calm: str = ""
+    elevenlabs_voice_id_hype: str = ""
     clerk_publishable_key: str = ""
     clerk_secret_key: str = ""
     # Off unless explicitly set; lets local tests run without Clerk.
