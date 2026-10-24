@@ -6,7 +6,7 @@ type Stats = {
   daily: { day: string; avg_score: number; best_score: number; reps: number }[]
   recent: { time: string; step_index: number; speed: number; drill: string; similarity: number; passed: boolean }[]
   reps_to_learn: { step_index: number; reps: number; learnt: boolean }[]
-  habits: { type: string; body_part: string | null; times: number }[]
+  habits: { label: string; times: number; share: number; body_part: string | null }[]
   mastery: { idx: number; rating: number; reps: number; passes: number; best_speed: number; due_at: string | null }[]
   streak: number
   xp: number
@@ -91,10 +91,10 @@ export default function Progress({ routine, back, practise }: { routine: Routine
           <ul className="plain">
             {s.reps_to_learn.map((r) => <li key={r.step_index}>{label(r.step_index)}: {r.reps} reps{r.learnt ? '' : ' (not passed yet)'}</li>)}
           </ul>
-          <h3>Your habits</h3>
+          <h3>Your habits (clustered from your reps)</h3>
           <ul className="plain">
-            {s.habits.length === 0 && <li className="notice">No recurring faults yet.</li>}
-            {s.habits.map((h, i) => <li key={i}>{h.type === 'shape' ? `${(h.body_part ?? '').replace('_', ' ')} out of position` : `${h.type} on the beat`}: {h.times}×</li>)}
+            {s.habits.length === 0 && <li className="notice">Not enough missed reps yet to spot a pattern (needs 4).</li>}
+            {s.habits.map((h, i) => <li key={i}><b>{h.label}</b> — {Math.round(h.share * 100)}% of your missed reps ({h.times})</li>)}
           </ul>
         </div>
       </div>

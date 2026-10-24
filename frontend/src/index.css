@@ -137,3 +137,4 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .ask { margin-top: 1.2rem; }
 .ask form { display: flex; gap: 0.5rem; }
 .ask input { flex: 1; padding: 0.7rem; border-radius: 10px; border: 1px solid #3a3448; background: #0f0d15; color: var(--ink); font-size: 1rem; }
+.habit { background: #2a2014; border-left: 3px solid var(--spot); padding: 0.5rem 0.8rem; border-radius: 0 8px 8px 0; }

@@ -33,7 +33,7 @@ TOOLS = [
     {
         "type": "function",
         "name": "get_habits",
-        "description": "The learner's recurring faults on this routine (from every scored rep): fault type, body part, how often, and which counts.",
+        "description": "The learner's habits on this routine: their failing reps clustered by what went wrong (limb, direction, counts, timing, energy), each with a plain label and share of reps.",
         "parameters": {"type": "object", "properties": {}},
     },
     {
@@ -89,11 +89,9 @@ def _tools(routine_id: str, user_id: str, ecs: list[dict]) -> dict[str, Callable
     def get_habits() -> dict:
         with db.pool.connection() as conn, conn.cursor(row_factory=dict_row) as c:
             habits = c.execute(
-                """SELECT top_fault->>'type' AS type, top_fault->>'body_part' AS body_part, top_fault->>'count' AS count,
-                          count(*) AS times, round(avg(similarity)) AS avg_score
-                   FROM rep_scores WHERE user_id=%s AND routine_id=%s AND top_fault IS NOT NULL
-                   GROUP BY 1, 2, 3 ORDER BY times DESC LIMIT 8""", (user_id, routine_id)).fetchall()
-        return {"habits": habits}
+                """SELECT label, count AS reps, share, fault FROM error_clusters
+                   WHERE user_id=%s AND routine_id=%s ORDER BY count DESC""", (user_id, routine_id)).fetchall()
+        return {"habits_from_clustering": habits}
 
     def get_lesson_plan() -> dict:
         with db.pool.connection() as conn, conn.cursor(row_factory=dict_row) as c:
@@ -258,7 +256,7 @@ def ask(routine_id: str, user_id: str, question: str, step_index: int, rep_conte
     # one call; it only uses a tool to offer a drill.
     import time
     t_data = time.time()
-    data = {"recent_reps": get_recent_reps(step_index)["reps_newest_first"][:6], "habits": base["get_habits"]()["habits"][:5]}
+    data = {"recent_reps": get_recent_reps(step_index)["reps_newest_first"][:6], "habits": base["get_habits"]()["habits_from_clustering"][:5]}
     log.warning("coach.ask data fetch %.1fs", time.time() - t_data)
     ctx = f" Latest rep: {json.dumps(rep_context)[:600]}." if rep_context else ""
     history: list = [{"type": "user_input", "content": [{"type": "text", "text":

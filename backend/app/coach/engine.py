@@ -54,7 +54,7 @@ class Rep:
     top_fault: dict | None
 
 
-def next_drill(difficulty: float, mastery: Mastery, recent: list[Rep], current_speed: float) -> dict:
+def next_drill(difficulty: float, mastery: Mastery, recent: list[Rep], current_speed: float, habit: dict | None = None) -> dict:
     """Pick what to do next on this step.
 
     - Passed twice in a row at this speed: move up a speed tier, or move on when at full speed.
@@ -79,14 +79,16 @@ def next_drill(difficulty: float, mastery: Mastery, recent: list[Rep], current_s
         return {"action": "practise", "speed": 0.5, "drill": "half", "reason": "Just the toughest half for a moment, then we'll stitch it back."}
 
     if len(full) >= 3 and not any(r.passed for r in full[-3:]) and (not recent or recent[-1].drill == "full"):
-        fault = full[-1].top_fault or {}
+        # A clustered habit beats the last rep's fault: drill what keeps going wrong.
+        fault = (habit or {}).get("fault") or full[-1].top_fault or {}
         part = fault.get("body_part", "")
         if fault.get("type") in ("late", "early"):
             return {"action": "practise", "speed": 0.5, "drill": "full", "reason": "Let's slow it right down and lock in the timing."}
+        why = f" ({habit['label'].lower()})" if habit else ""
         if any(k in part for k in ("arm", "elbow", "wrist", "hand", "shoulder")):
-            return {"action": "practise", "speed": 0.5, "drill": "arms", "reason": f"Arms only for a moment: your {part.replace('_', ' ')} keeps slipping."}
-        if any(k in part for k in ("leg", "knee", "ankle", "foot", "hip")):
-            return {"action": "practise", "speed": 0.5, "drill": "legs", "reason": f"Legs only for a moment: your {part.replace('_', ' ')} keeps slipping."}
+            return {"action": "practise", "speed": 0.5, "drill": "arms", "reason": f"Arms only for a moment: your {part.replace('_', ' ')} keeps slipping{why}."}
+        if any(k in part for k in ("leg", "knee", "ankle", "foot", "hip", "thigh", "shin")):
+            return {"action": "practise", "speed": 0.5, "drill": "legs", "reason": f"Legs only for a moment: your {part.replace('_', ' ')} keeps slipping{why}."}
         return {"action": "practise", "speed": 0.5, "drill": "freeze", "reason": "Let's hold each key shape first, then put it back together."}
 
     candidates = [(s, pass_chance(mastery.rating, difficulty, s)) for s in SPEEDS]

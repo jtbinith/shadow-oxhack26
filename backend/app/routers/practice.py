@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from .. import db
 from ..auth import User
+from ..coach import clusters as habits_mod
 from ..coach import engine
 
 router = APIRouter(prefix="/api/routines/{routine_id}", tags=["practice"])
@@ -80,8 +81,20 @@ def record_rep(routine_id: str, session_id: str, rep: RepIn, user_id: str = User
         main = rep.eight_counts[-1]
         m_row = c.execute("SELECT rating, reps, passes, best_speed, stability FROM ec_mastery WHERE user_id=%s AND routine_id=%s AND idx=%s",
                           (user_id, routine_id, main)).fetchone()
-    nxt = engine.next_drill(diffs.get(main, 0.5), engine.Mastery(**m_row), recent, rep.speed)
-    return {"passed": passed, "next": nxt}
+        # Re-cluster this learner's faults on this routine into habits.
+        all_reps = c.execute(
+            "SELECT top_fault, passed FROM rep_scores WHERE user_id=%s AND routine_id=%s ORDER BY time DESC LIMIT 200",
+            (user_id, routine_id)).fetchall()
+        found = habits_mod.cluster(all_reps)
+        c.execute("DELETE FROM error_clusters WHERE user_id=%s AND routine_id=%s", (user_id, routine_id))
+        for k, h in enumerate(found):
+            c.execute(
+                """INSERT INTO error_clusters (user_id, routine_id, cluster_id, label, body_part, count, share, fault, centroid)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, '{}')""",
+                (user_id, routine_id, k, h["label"], h["body_part"], h["count"], h["share"], json.dumps(h["fault"])))
+    habit = found[0] if found and found[0]["share"] >= 0.5 else None
+    nxt = engine.next_drill(diffs.get(main, 0.5), engine.Mastery(**m_row), recent, rep.speed, habit)
+    return {"passed": passed, "next": nxt, "habit": habit["label"] if habit else None}
 
 
 @router.get("/progress")
@@ -127,9 +140,8 @@ def stats(routine_id: str, user_id: str = User) -> dict:
                      FROM rep_scores WHERE user_id=%s AND routine_id=%s) t GROUP BY step_index, first_pass ORDER BY step_index""",
             (user_id, routine_id)).fetchall()
         habits = c.execute(
-            """SELECT top_fault->>'type' AS type, top_fault->>'body_part' AS body_part, count(*) AS times
-               FROM rep_scores WHERE user_id=%s AND routine_id=%s AND top_fault IS NOT NULL
-               GROUP BY 1, 2 ORDER BY times DESC LIMIT 5""", (user_id, routine_id)).fetchall()
+            """SELECT label, count AS times, share, body_part FROM error_clusters
+               WHERE user_id=%s AND routine_id=%s ORDER BY count DESC""", (user_id, routine_id)).fetchall()
         mastery = c.execute(
             "SELECT idx, round(rating) AS rating, reps, passes, best_speed, due_at FROM ec_mastery WHERE user_id=%s AND routine_id=%s ORDER BY idx",
             (user_id, routine_id)).fetchall()

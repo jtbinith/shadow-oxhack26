@@ -172,6 +172,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const [drill, setDrill] = useState<Drill>('full')
   const [result, setResult] = useState<RepScore | null>(null)
   const [next, setNext] = useState<Next | null>(null)
+  const [habit, setHabit] = useState<string | null>(null)
   const [countLabel, setCountLabel] = useState('')
   const ref = useRef<RefData | null>(null)
   const session = useRef<string | null>(null)
@@ -345,7 +346,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     void speak(score.cue)
     if (!session.current) return
     try {
-      const res = await api<{ passed: boolean; next: Next }>(`/api/routines/${routine.id}/sessions/${session.current}/reps`, {
+      const res = await api<{ passed: boolean; next: Next; habit: string | null }>(`/api/routines/${routine.id}/sessions/${session.current}/reps`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -362,6 +363,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         }),
       })
       setNext(res.next)
+      setHabit(res.habit)
     } catch {
       /* offline: still show the score */
     }
@@ -539,6 +541,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
             <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.dynamics !== null ? ` · energy ${result.dynamics}` : ''}{result.timingBiasMs && Math.abs(result.timingBiasMs) > 60 ? ` · ${result.timingBiasMs > 0 ? 'a little late' : 'a little early'}` : ''}</span>
           </div>
           <p className="cue">“{result.cue}”</p>
+          {habit && <p className="habit">Pattern spotted across your reps: <b>{habit}</b></p>}
           {result.notes.length > 0 && (
             <ul className="rep-notes">
               {result.notes.map((n, i) => <li key={i}>{n}</li>)}
