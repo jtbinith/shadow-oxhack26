@@ -162,7 +162,17 @@ Schema: `backend/migrations/001_init.sql`.
 
 ---
 
-## 7. Planned features: how they'll work 🛠
+## 7. Upload → course and the practice loop ✅ (as built)
+
+**Upload → course** (`backend/app/pipeline/`): ffmpeg → 30 fps silent video + mono audio → librosa beats, downbeats (the bar phase with the strongest onsets) and a chroma/onset fingerprint → **audio deleted** → MediaPipe pose (same model as the browser) → **video deleted** → skeletons normalised in pixels (centred on the hips, torso = 1) → 8-counts, repeats (bone-direction signatures compared), hits/freezes, difficulty → **Gemini 3.5 Flash-Lite** writes the lesson plan from the curriculum playbook (~3 s), validated; a fixed chaining plan if Gemini fails or the daily cap is reached.
+
+**Practice** (`frontend/src/pages/Practice.tsx`, `coach/score.ts`): count-in "5, 6, 7, 8" + click track at the routine's tempo × speed → the **ghost** (reference pose for that moment, scaled to your torso and pinned to your hips; each limb green/amber/red by angle error) → at the end, **scoring**: DTW over limb directions (limbs weighted over torso) for shape, hit timing within ±250 ms, a score per count → the **top fault** becomes **one cue** ("Right arm higher on 6.") → replay of your worst count beside the reference.
+
+**Learning engine** (`backend/app/coach/engine.py`): each rep updates an **Elo rating** per 8-count; the next drill is the speed with a 70–85% predicted pass chance; two passes in a row → next tier; three fails → **teach the same move** (arms only / legs only / key-pose freezes / slow down for timing); passes push the **review date** out (spaced repetition). Progress page: streak, XP, steps learnt, rep-by-rep scores, mastery and tiers, reps to learn, habits.
+
+*Temporary:* cues and count-in use the browser's built-in voice until the ElevenLabs key is in.
+
+## 8. Still planned 🛠
 
 ### Upload → course
 1. ffmpeg converts the video to 30 fps.
@@ -192,7 +202,7 @@ Schema: `backend/migrations/001_init.sql`.
 
 ---
 
-## 8. Glossary
+## 9. Glossary
 
 | Term | Plain meaning |
 |---|---|
@@ -213,7 +223,7 @@ Schema: `backend/migrations/001_init.sql`.
 
 ---
 
-## 9. Likely questions at the demo
+## 10. Likely questions at the demo
 
 **"Is my video uploaded?"** During practice, never: tracking runs in your browser. For an uploaded routine, the video is deleted as soon as the skeleton and beats are extracted.
 
