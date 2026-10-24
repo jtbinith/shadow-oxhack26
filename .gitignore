@@ -1,0 +1,22 @@
+# secrets
+.env
+.env.*
+!.env.example
+# python
+__pycache__/
+*.pyc
+.venv/
+# node
+node_modules/
+dist/
+# data (large / licensed / personal)
+data/
+uploads/
+*.mp4
+*.mov
+*.wav
+*.mp3
+# os / editor
+.DS_Store
+.vscode/
+.idea/
