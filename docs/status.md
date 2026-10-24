@@ -20,16 +20,16 @@ Gemini (planning model `gemini-3.5-flash-lite`; 3.8-flash was ~55 s/call), Tiger
 - **Agents (Gemini tool loops)**: "Tell the coach" re-plan (get_progress / get_habits / get_lesson_plan / update_lesson_plan) and **Ask the coach** mid-practice (data prefetched, `suggest_drill` tool, ~5 s, spoken).
 - **Voice**: ElevenLabs via `/api/tts`, cached per line in Tiger Data, rationed; browser voice fallback; persona toggle.
 - **Progress page**: streak, XP, steps learnt, rep-by-rep bars, mastery/tiers/reviews, reps-to-learn, habits, "practise weakest step".
+- **Error clustering** (`backend/app/coach/clusters.py`): failing reps → k-means (k by silhouette) → labelled habits; drives drills, coach agents, progress, practice banner.
 - **Rationing**: daily caps (Gemini 300, TTS 20k chars, uploads 40) in `usage` table.
 - **AIST++ calibration study**: ran; expert vs wrong-choreo overlap ~29% → placeholders kept (`docs/aist-calibration.md`).
 
 ## Not built / honest gaps ❌
-- **Error clustering**: "habits" are a SQL group-by of top faults, not clustering; `error_clusters` table unused. **Move clustering / naming**: not built.
+- **Move clustering / naming**: not built. (Error clustering ✅ now built — see above.)
 - Mic sync to the user's own song (P1), spoken questions (STT), group mode, true 3D mesh ghost, sections, HF deploy.
 - No trained correction model (no open dance-correction dataset available tonight; Ego-Exo4D needs ~2-day licence).
 
 ## Next (suggested order)
 1. User runs the full flow with a real clip **with music** → fix what breaks.
-2. Real error clustering (~45 min) → feeds next drill, coach, progress.
 3. UI polish. 4. Reference clips (follow `docs/datasets.yaml` own_data_spec), slides, rehearsal, backup video, Devpost.
 5. HF deploy if time (needs HF token). 6. Mic sync (riskiest).

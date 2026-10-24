@@ -176,7 +176,7 @@ Schema: `backend/migrations/001_init.sql`.
 
 **Agents:** "Tell the coach" (re-plan) and "Ask the coach" (mid-practice questions) are Gemini tool-use loops over your real reps and habits; the scoring itself stays deterministic.
 
-**Honest gap:** "habits" are currently a grouping of your top faults, not true clustering (planned). Move naming via clustering is not built.
+**Error clustering:** each missed rep becomes a vector (fault type, limb, direction, where in the 8-count); k-means with the number of groups picked by silhouette score turns them into **habits** like "Left arm too low around counts 3–4". Habits pick the breakdown drill, feed both agents, and show on the progress page. *Move* clustering/naming is not built.
 
 ## 8. Still planned 🛠
 
