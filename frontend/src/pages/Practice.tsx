@@ -5,6 +5,18 @@ import { useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, boneMask, normaliseFrame, refFrame, scoreRep, type Drill, type Frame, type RefData, type RepScore, type UserSample } from '../coach/score'
 import { styleCue, styleFor } from '../coach/styles'
 
+// The parts of the Web Speech API we use (not in TypeScript's DOM types everywhere).
+type SpeechRecognitionLike = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((e: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
 type Phase = 'loading' | 'ready' | 'countin' | 'dancing' | 'feedback'
 type Next = { action: 'practise' | 'next_step'; speed?: number; drill?: Drill; reason: string }
 type Reference = { fps: number; start: number; end: number; counts: number[]; points: number[][][] }
@@ -186,6 +198,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const refVideo = useRef<HTMLVideoElement>(null)
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
+  const [listening, setListening] = useState(false)
+  const recogniser = useRef<SpeechRecognitionLike | null>(null)
   const [coachAnswer, setCoachAnswer] = useState<{ answer: string; drill: { drill: Drill; speed: number; reason: string } | null } | null>(null)
   const lostSince = useRef<number | null>(null)
   const style = styleFor(routine.style)
@@ -280,8 +294,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     v.pause()
   }, [phase, videoUrl, speed, seg.start, seg.end])
 
-  const askCoach = async () => {
-    const q = question.trim()
+  const askCoach = async (spoken?: string) => {
+    const q = (spoken ?? question).trim()
     if (q.length < 2 || !session.current) return
     setAsking(true)
     setCoachAnswer(null)
@@ -300,6 +314,36 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     } finally {
       setAsking(false)
     }
+  }
+
+  // Spoken questions: the browser's own speech recognition (Chrome/Edge/Safari), so no extra service.
+  const Recognition = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
+    ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition
+  const listen = () => {
+    if (!Recognition) return
+    if (listening) {
+      recogniser.current?.stop()
+      return
+    }
+    const r = new Recognition()
+    r.lang = 'en-GB'
+    r.interimResults = true
+    r.maxAlternatives = 1
+    let finalText = ''
+    r.onresult = (e) => {
+      const text = Array.from(e.results).map((res) => res[0].transcript).join(' ')
+      setQuestion(text)
+      if (e.results[e.results.length - 1].isFinal) finalText = text
+    }
+    r.onend = () => {
+      setListening(false)
+      recogniser.current = null
+      if (finalText.trim().length >= 2) void askCoach(finalText)
+    }
+    r.onerror = () => setListening(false)
+    recogniser.current = r
+    setListening(true)
+    r.start()
   }
 
   const start = useCallback(() => {
@@ -574,6 +618,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
             }}
           >
             <input placeholder='Ask the coach — "am I lifting my arm high enough?", "I can&apos;t get the spin"' value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
+            {Recognition && (
+              <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title="Ask out loud">
+                {listening ? '● Listening…' : '🎤 Speak'}
+              </button>
+            )}
             <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
           </form>
           {coachAnswer && (
