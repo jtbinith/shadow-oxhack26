@@ -26,10 +26,16 @@ export default function LessonTree({ routine, practise, showProgress, replanned 
   const [progress, setProgress] = useState<Progress | null>(null)
   const [request, setRequest] = useState('')
   const [replanning, setReplanning] = useState(false)
+  const [coachSays, setCoachSays] = useState<{ text: string; actions: string[] } | null>(null)
   const replan = async () => {
     setReplanning(true)
     try {
-      await api(`/api/routines/${routine.id}/replan`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request }) })
+      const r = await api<{ explanation: string; actions: string[] }>(`/api/routines/${routine.id}/replan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request }),
+      })
+      setCoachSays({ text: r.explanation, actions: r.actions })
       setRequest('')
       replanned()
     } finally {
@@ -64,6 +70,14 @@ export default function LessonTree({ routine, practise, showProgress, replanned 
             <button className="primary" disabled={replanning || request.trim().length < 3}>{replanning ? 'Re-planning…' : 'Re-plan'}</button>
           </form>
         </div>
+        {coachSays && (
+          <div className="coach-says">
+            <p>🗣️ {coachSays.text}</p>
+            {coachSays.actions.length > 0 && (
+              <span className="notice">The coach looked at: {coachSays.actions.map((a) => a.replace('get_', '').replace('update_lesson_plan', 'and rewrote your plan').replace('_', ' ')).join(', ')}</span>
+            )}
+          </div>
+        )}
       </header>
       <ol className="path">
         {steps.map((s, i) => {

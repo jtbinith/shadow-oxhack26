@@ -121,3 +121,5 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .tree-actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 0.8rem; }
 .replan { display: flex; gap: 0.5rem; flex: 1; min-width: 300px; }
 .replan input { flex: 1; padding: 0.6rem; border-radius: 10px; border: 1px solid #3a3448; background: #0f0d15; color: var(--ink); }
+.coach-says { background: #17141f; border-left: 3px solid var(--spot); border-radius: 0 10px 10px 0; padding: 0.8rem 1rem; margin-top: 0.8rem; }
+.coach-says p { margin: 0 0 0.3rem; }

@@ -153,8 +153,10 @@ class ReplanIn(BaseModel):
 
 @router.post("/replan")
 def replan(routine_id: str, body: ReplanIn, user_id: str = User) -> dict:
-    """The learner asks for a different plan in their own words ("I have two weeks", "I keep messing up the turn")."""
-    from ..agent import plan as lesson_plan
+    """The learner talks to the coach in their own words ("I have two weeks", "I keep messing up the turn").
+    An agent (Gemini + tools over their progress, habits and plan) rewrites the plan and explains itself;
+    the rule-based planner takes over if the agent fails."""
+    from ..agent import coach
 
     with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
         _owned(c, routine_id, user_id)
@@ -163,8 +165,5 @@ def replan(routine_id: str, body: ReplanIn, user_id: str = User) -> dict:
     for e in ecs:
         e["visible"] = 1.0
         e["difficulty"] = e["difficulty"] or 0.5
-    new_plan, source = lesson_plan.build(ecs, tempo, user_id, body.request)
-    saved = new_plan.model_dump() | {"source": source, "request": body.request}
-    with _pool().connection() as c:
-        c.execute("UPDATE routines SET lesson_plan = %s WHERE id = %s", (json.dumps(saved), routine_id))
-    return saved
+        e["hits"] = sum(1 for m in (e.pop("key_moments") or []) if m.get("type") == "hit")
+    return coach.run(routine_id, user_id, body.request, ecs, tempo)
