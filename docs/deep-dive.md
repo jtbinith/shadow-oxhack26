@@ -170,7 +170,13 @@ Schema: `backend/migrations/001_init.sql`.
 
 **Learning engine** (`backend/app/coach/engine.py`): each rep updates an **Elo rating** per 8-count; the next drill is the speed with a 70–85% predicted pass chance; two passes in a row → next tier; three fails → **teach the same move** (arms only / legs only / key-pose freezes / slow down for timing); passes push the **review date** out (spaced repetition). Progress page: streak, XP, steps learnt, rep-by-rep scores, mastery and tiers, reps to learn, habits.
 
-*Temporary:* cues and count-in use the browser's built-in voice until the ElevenLabs key is in.
+**Voice:** cues and coach answers use ElevenLabs (cached per line, rationed); the count-in uses the local voice so it lands on the beat.
+
+**Corrections are body directions, not numbers:** the fault's direction comes from geometry — where your limb points vs where the routine's points, relative to *your* body (higher / lower, out wider / in closer) — so cues say "Right arm a touch higher on 6", never degrees or milliseconds.
+
+**Agents:** "Tell the coach" (re-plan) and "Ask the coach" (mid-practice questions) are Gemini tool-use loops over your real reps and habits; the scoring itself stays deterministic.
+
+**Honest gap:** "habits" are currently a grouping of your top faults, not true clustering (planned). Move naming via clustering is not built.
 
 ## 8. Still planned 🛠
 
