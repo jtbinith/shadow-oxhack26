@@ -41,6 +41,13 @@ Every new camera frame goes through five steps.
 - The models only run when the camera delivers a **new** frame. Running twice on the same frame made the points jitter.
 - Points come back as x and y between 0 and 1 (fractions of the image), plus a depth estimate (z) and, for the body, a confidence score ("visibility").
 
+### What kind of tracking is this? (not SIFT or SLAM)
+- **SIFT** matches hand-crafted image features between pictures; **SLAM** works out where a *camera* is while building a map of the room. Shadow uses neither.
+- Shadow uses **tracking-by-detection**: deep-learning models **detect** people and their keypoints in every frame, and our tracker **links** the detections over time into identities.
+  - **Detection:** MediaPipe **BlazePose** (a CNN that finds people, then regresses 33 keypoints, re-using the last frame's pose to crop the next) and MediaPipe **Hands** (palm detector + 21-point hand model).
+  - **Linking:** motion prediction + cost-based matching + **OSNet** deep re-ID fingerprints (+ clothing colour as a fallback). This is a simplified version of **DeepSORT/StrongSORT**, the standard multi-person trackers.
+- Detections that aren't plausible people (no shoulders, a "person" found in a chair) are dropped before tracking.
+
 ### Step 2: The tracker decides who is who
 MediaPipe returns people in a random order each frame. Without tracking, colours jumped between people. The tracker (`tracker.ts`) gives each person a **stable ID**:
 
