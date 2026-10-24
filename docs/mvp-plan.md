@@ -69,6 +69,7 @@ All were reviewed: no unexpected network calls or credential access in their scr
 | `skill-creator` | Anthropic, Apache-2.0 | Writing project skills for the coding agent (e.g. our repo conventions) |
 | `frontend-design` | Anthropic, Apache-2.0 | A distinctive UI, not template defaults |
 | `webapp-testing` | Anthropic, Apache-2.0 | Playwright run of the demo path before judging |
+| `gemini-api-dev` | Google, Apache-2.0 | Current Gemini models, function calling, structured output (the app's agent) |
 | `vercel-react-best-practices` | Vercel, MIT | Re-render and performance rules for the webcam/overlay loop (ignore its Next.js server rules) |
 | `text-to-speech` | ElevenLabs, MIT | Coach voice, streaming, cue cache |
 | `agents` | ElevenLabs, MIT | Post-MVP "Why?" voice agent |
