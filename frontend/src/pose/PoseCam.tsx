@@ -107,15 +107,25 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
   const video = useRef<HTMLVideoElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState('Starting camera…')
+  const [perf, setPerf] = useState('')
 
   useEffect(() => {
     let landmarker: PoseLandmarker | undefined
     let hands: HandLandmarker | undefined
     const tracker = new PersonTracker(MAX_PEOPLE)
     // Tuned for dancing: steady when still, follows fast moves with little lag.
-    const bodySmooth = new SmootherBank(1.7, 0.3)
+    const bodySmooth = new SmootherBank(2.5, 0.6)
     // Fingers move fastest; hand points have no visibility score.
-    const handSmooth = new SmootherBank(2.0, 0.6, false)
+    const handSmooth = new SmootherBank(3.0, 1.0, false)
+    // Performance: frame counter, smoothed timings, and the last hand result for skipped frames.
+    let frameNo = 0
+    let fps = 30
+    let lastFrameAt = 0
+    let poseMs = 0
+    let handMs = 0
+    let lastHands: ReturnType<HandLandmarker['detectForVideo']> | null = null
+    let lastHists: (Float32Array | null)[] = []
+    let lastPerfUpdate = 0
     let lastVideoTime = -1
     // A small copy of each frame for sampling clothing colours (cheap to read).
     const sample = document.createElement('canvas')
@@ -163,12 +173,32 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
               canvas.current!.height = v.videoHeight
             }
             const now = performance.now()
+            frameNo++
+            if (lastFrameAt) fps = 0.9 * fps + 0.1 * (1000 / (now - lastFrameAt))
+            lastFrameAt = now
+            let t0 = performance.now()
             const body = landmarker.detectForVideo(v, now)
-            const hand = hands.detectForVideo(v, now)
+            poseMs = 0.9 * poseMs + 0.1 * (performance.now() - t0)
+            // When the frame rate drops, run the hand model every other frame.
+            const runHands = fps >= 24 || frameNo % 2 === 0 || !lastHands
+            if (runHands) {
+              t0 = performance.now()
+              lastHands = hands.detectForVideo(v, now)
+              handMs = 0.9 * handMs + 0.1 * (performance.now() - t0)
+            }
+            const hand = lastHands!
             ctx.clearRect(0, 0, v.videoWidth, v.videoHeight)
-            sampleCtx.drawImage(v, 0, 0, sample.width, sample.height)
-            const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height)
-            const hists = body.landmarks.map((b) => clothingHistogram(pixels, b))
+            // Reading pixels back is slow, so sample clothing colours every 4th frame
+            // (and whenever the number of people changes).
+            let hists: (Float32Array | null)[]
+            if (frameNo % 4 === 0 || lastHists.length !== body.landmarks.length) {
+              sampleCtx.drawImage(v, 0, 0, sample.width, sample.height)
+              const pixels = sampleCtx.getImageData(0, 0, sample.width, sample.height)
+              hists = body.landmarks.map((b) => clothingHistogram(pixels, b))
+              lastHists = hists
+            } else {
+              hists = body.landmarks.map(() => null)
+            }
             const ids = tracker.update(body.landmarks, hists, now)
             // Drop duplicates / over-limit bodies before giving out hands.
             const keep = ids.map((id, i) => (id >= 0 ? i : -1)).filter((i) => i >= 0)
@@ -195,6 +225,10 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             // Hands whose body wasn't found (e.g. someone at the edge of the frame).
             for (const h of loose) drawSkeleton(ctx, h.points, HandLandmarker.HAND_CONNECTIONS, '#d9d9d9', 1.5, 1.5)
             if (people.length) onFrame?.({ people })
+            if (now - lastPerfUpdate > 500) {
+              lastPerfUpdate = now
+              setPerf(`${fps.toFixed(0)} fps · pose ${poseMs.toFixed(0)} ms · hands ${handMs.toFixed(0)} ms${runHands ? '' : ' (every 2nd frame)'}`)
+            }
           }
           raf = requestAnimationFrame(loop)
         }
@@ -218,6 +252,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
       <video ref={video} playsInline muted />
       <canvas ref={canvas} />
       {status && <p className="notice">{status}</p>}
+      {perf && <p className="perf">{perf}</p>}
     </div>
   )
 }
