@@ -9,8 +9,9 @@ import {
 
 const WORD = 'SHADOW';
 const LETTER_WIDTH = 150;
-const RECT_WIDTH = 120;
-const RECT_HEIGHT = 240;
+// Two panels side by side cover the whole word at the start
+const RECT_WIDTH = (WORD.length * LETTER_WIDTH) / 2;
+const RECT_HEIGHT = 280;
 
 export const ShadowReveal: React.FC = () => {
   const frame = useCurrentFrame();
@@ -21,13 +22,13 @@ export const ShadowReveal: React.FC = () => {
 
   const centerX = width / 2;
 
-  // Both rectangles sit together at the centre, then drift apart to the edges
+  // Both panels meet at the centre, then their inner edges drift apart to the screen edges
   const sweepStart = 30;
   const sweepEnd = durationInFrames - 45;
   const offset = interpolate(
     frame,
     [sweepStart, sweepEnd],
-    [0, width / 2 + RECT_WIDTH / 2],
+    [0, width / 2],
     {
       extrapolateLeft: 'clamp',
       extrapolateRight: 'clamp',
@@ -40,7 +41,7 @@ export const ShadowReveal: React.FC = () => {
       {WORD.split('').map((letter, i) => {
         const letterLeft = wordLeft + i * LETTER_WIDTH;
         const letterRight = letterLeft + LETTER_WIDTH;
-        // Each letter fades in while the rectangle heading its way passes over it
+        // Each letter fades in as the inner edge of the panel heading its way passes over it
         const [near, far] =
           letterLeft >= centerX
             ? [letterLeft - centerX, letterRight - centerX]
@@ -79,12 +80,12 @@ export const ShadowReveal: React.FC = () => {
         );
       })}
 
-      {[centerX - offset, centerX + offset].map((x, i) => (
+      {[centerX - offset - RECT_WIDTH, centerX + offset].map((left, i) => (
         <div
           key={i}
           style={{
             position: 'absolute',
-            left: x - RECT_WIDTH / 2,
+            left,
             top: centerY - RECT_HEIGHT / 2,
             width: RECT_WIDTH,
             height: RECT_HEIGHT,

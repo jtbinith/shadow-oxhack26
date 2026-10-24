@@ -7,7 +7,7 @@ Hacking runs **Sat 24 Oct 14:00 → Sun 25 Oct 12:00** (22 h). This plan starts 
 ## 1. The MVP: two features, done properly
 
 ### Feature 1: "Any dance video becomes your course"
-Upload a clip → beats measured and **audio deleted** → 30 fps pose → **video frames deleted** → 8-counts → the Gemini agent builds a Duolingo-style lesson tree with **chaining** (A, B, A+B, …) and a speed ladder (0.5× → 0.75× → 1×).
+Upload a clip → beats measured and **audio deleted** → 30 fps pose → **silent video kept for previews** → 8-counts → the Gemini agent builds a Duolingo-style lesson tree with **chaining** (A, B, A+B, …) and a speed ladder (0.5× → 0.75× → 1×).
 
 The finished bar: it works on any front-facing clip, the processing screen shows each stage, and the lesson tree is clear and good-looking.
 
@@ -119,7 +119,7 @@ The hard safety rules also live in code and the system prompt, not only in a pla
 | Screen | Contents |
 |---|---|
 | **1. Upload** | Drop zone, rights agreement checkbox, camera tips (full body, chest height, ~3 m, front-on) |
-| **2. Processing** | Stage list ticking off: beats found → **audio deleted** → skeletons → **video frames deleted** → 8-counts → course built |
+| **2. Processing** | Stage list ticking off: beats found → **audio deleted** → skeletons → **silent video kept for previews** → 8-counts → course built |
 | **3. Lesson tree** | A Duolingo-style path: one node per 8-count, chain checkpoints (A+B) as larger nodes, bronze/silver/gold for the speed tiers, locked nodes greyed |
 | **4. Practise** | Centre: mirrored webcam + ghost, watched joints coloured. Left: counts strip with beat flash. Right: live score meter, speed, XP. After each rep: score card, worst-count replay, cue caption |
 | **5. Next drill** | The agent's choice with a one-line reason ("arms only: your elbow drops on 3 of the last 4 reps") |
@@ -138,7 +138,7 @@ Build screens 3 and 4 first (the demo lives there), then 1–2, then 5–6.
 | 2. Live demo | (most of the time, see below), **on the live URL** |
 | 3. How it works | Pipeline diagram: ingest on a Vultr GPU → Gemini agent + coaching playbooks → live loop in the browser → Tiger Data. "The agent decides; the tools measure." |
 | 4. The adaptive engine | Elo mastery, sweet-spot drills, spaced repetition, error clusters |
-| 5. Responsible by design | Audio and video deleted after processing, a click track instead of the song, login + private data, safety guardrails |
+| 5. Responsible by design | Audio deleted after processing (silent video kept for previews), a click track instead of the song, login + private data, safety guardrails |
 | 6. Tracks + next | ElevenLabs, Tiger Data, Vultr; next: the Presage desktop app, mic sync, group mode |
 
 Have ready answers for: "Isn't this just Just Dance?" (any video, it teaches, it adapts), "Copyright?" (slide 5), "Does it actually help?" (show a tester's score climbing over 5 reps).
@@ -146,7 +146,7 @@ Have ready answers for: "Isn't this just Just Dance?" (any video, it teaches, it
 ## 7. Demo plan
 
 **Script (≈2 min of the 3):**
-1. On the live URL, upload our own 30-second clip. The processing screen shows "audio deleted", "frames deleted", 4 eight-counts.
+1. On the live URL, upload our own 30-second clip. The processing screen shows "audio deleted", "silent video kept", 4 eight-counts.
 2. The lesson tree appears. A judge picks node 1 at 0.5×.
 3. The judge dances. The ghost and joint colours show; the score is about 60; the coach voice gives one cue; next rep about 75.
 4. The judge fails the turn → the coach teaches that turn: freezes on its 3 key poses at 0.25×, then legs only, then the full turn, and says why ("your shoulders open early on 6").

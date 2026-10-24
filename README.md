@@ -55,7 +55,7 @@ Shadow makes **any dance video a personal course** and acts as **a coach that wa
 
 - **Upload** a front-facing clip, with an agreement that you have the right to use it.
 - **Beat analysis:** beats, downbeats and tempo build the counts grid (two bars of 4/4 = one 8-count). A coarse music fingerprint is stored for mic sync (see feature 4). **Then the audio is deleted.**
-- **Pose extraction:** the video is converted to 30 fps and the dancer's skeleton is extracted. **Then the video frames are deleted.** Only skeletons are kept.
+- **Pose extraction:** the video is converted to 30 fps and the dancer's skeleton is extracted. A **silent** copy is kept, only for the learner's own side-by-side preview; it's private to their account and deleted with the routine.
 - **Normalisation:** skeletons are centred on the hips, scaled by torso length (fair for every body size) and mirrored, as dancers usually expect.
 - **Routine modelling:** 8-counts, **repeats** (taught once), **key moments** (hits, freezes, turns, level changes) and sections.
 - **Move naming** (see feature 5): each segment is named from a labelled move library ("body roll", "toprock"), and you can rename it.
@@ -101,7 +101,7 @@ Shadow makes **any dance video a personal course** and acts as **a coach that wa
 
 - **Score calibration:** AIST++ has the same choreography danced by many skilled dancers. The typical difference between two experts sets what "excellent" looks like, and beginners' first attempts set the other end. Scores are mapped between the two, so **"80" means the same thing in every routine**.
 - **Move library:** we label a seed library of common moves from AIST++ clips. Each new 8-count's segments are matched by nearest neighbour (DTW distance and pgvector search) to name them.
-- For segments with no close match, Gemini suggests a name from 3–4 keyframes (taken before the video frames are deleted) plus pose hints and the style's vocabulary, with a confidence shown. Your renames are saved to your glossary and reused.
+- For segments with no close match, Gemini suggests a name from 3–4 keyframes (from the silent preview copy) plus pose hints and the style's vocabulary, with a confidence shown. Your renames are saved to your glossary and reused.
 
 ### 6. Progress metrics
 
@@ -222,7 +222,7 @@ All tool inputs and outputs are schema-checked. The hard rules (safety, data acc
 **Copyright**
 - The uploaded **audio is deleted** after the beats and fingerprint are extracted. The fingerprint can't recreate the recording.
 - The **song is never stored or played** by Shadow. You play your own copy, or practise to the click track.
-- **Video frames are deleted** after pose extraction. Replays show skeletons, not footage.
+- **Only a silent copy of the video is kept**, private to the learner, for the side-by-side preview; deleting the routine deletes it. Replays of the learner show skeletons, never their webcam footage.
 - Uploads need a rights agreement (your own routine, your teacher's, or personal practice), and there's no feature for re-sharing someone else's choreography.
 
 **Privacy and security**

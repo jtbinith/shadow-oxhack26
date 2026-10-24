@@ -164,7 +164,7 @@ Schema: `backend/migrations/001_init.sql`.
 
 ## 7. Upload → course and the practice loop ✅ (as built)
 
-**Upload → course** (`backend/app/pipeline/`): ffmpeg → 30 fps silent video + mono audio → librosa beats, downbeats (the bar phase with the strongest onsets) and a chroma/onset fingerprint → **audio deleted** → MediaPipe pose (same model as the browser) → **video deleted** → skeletons normalised in pixels (centred on the hips, torso = 1) → 8-counts, repeats (bone-direction signatures compared), hits/freezes, difficulty → **Gemini 3.5 Flash-Lite** writes the lesson plan from the curriculum playbook (~3 s), validated; a fixed chaining plan if Gemini fails or the daily cap is reached.
+**Upload → course** (`backend/app/pipeline/`): ffmpeg → 30 fps silent video + mono audio → librosa beats, downbeats (the bar phase with the strongest onsets) and a chroma/onset fingerprint → **audio deleted** → MediaPipe pose (same model as the browser) → **silent video kept** (private, for the side-by-side preview) → skeletons normalised in pixels (centred on the hips, torso = 1) → 8-counts, repeats (bone-direction signatures compared), hits/freezes, difficulty → **Gemini 3.5 Flash-Lite** writes the lesson plan from the curriculum playbook (~3 s), validated; a fixed chaining plan if Gemini fails or the daily cap is reached.
 
 **Practice** (`frontend/src/pages/Practice.tsx`, `coach/score.ts`): count-in "5, 6, 7, 8" + click track at the routine's tempo × speed → the **ghost** (reference pose for that moment, scaled to your torso and pinned to your hips; each limb green/amber/red by angle error) → at the end, **scoring**: DTW over limb directions (limbs weighted over torso) for shape, hit timing within ±250 ms, a score per count → the **top fault** becomes **one cue** ("Right arm higher on 6.") → replay of your worst count beside the reference.
 
@@ -225,7 +225,7 @@ Schema: `backend/migrations/001_init.sql`.
 
 ## 10. Likely questions at the demo
 
-**"Is my video uploaded?"** During practice, never: tracking runs in your browser. For an uploaded routine, the video is deleted as soon as the skeleton and beats are extracted.
+**"Is my video uploaded?"** During practice, never: tracking runs in your browser. For an uploaded routine, the audio is deleted after the beats are measured; a silent copy of the video is kept, private to you, only for the practice preview, and it's deleted with the routine.
 
 **"How does it know who is who?"** A tracker predicts where each person will be, and checks position, size and clothing colour. It remembers people for 10 seconds if they leave.
 
@@ -235,6 +235,6 @@ Schema: `backend/migrations/001_init.sql`.
 
 **"Is it secure?"** Login is required for every API call, tokens are verified against Clerk's public keys, secret keys never reach the browser, and anything not configured refuses access.
 
-**"What about copyright?"** Uploaded audio is deleted after the beats are measured; Shadow never stores or plays the song. You play your own copy, or practise to a click track.
+**"What about copyright?"** Uploaded audio is deleted after the beats are measured; Shadow never stores or plays the song. The preview video is silent. You play your own copy, or practise to a click track.
 
 **"What happens with several dancers?"** It tracks up to 4 people now; scoring follows the main dancer. Group mode (who's early or late on each count) is next.
