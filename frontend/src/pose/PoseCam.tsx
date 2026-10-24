@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { DrawingUtils, FilesetResolver, HandLandmarker, PoseLandmarker, type NormalizedLandmark } from '@mediapipe/tasks-vision'
+import { PersonTracker } from './tracker'
 
 export type Landmark = NormalizedLandmark
 export type Hand = { side: string; points: Landmark[] }
-export type Person = { body: Landmark[]; hands: Hand[] }
+export type Person = { id: number; body: Landmark[]; hands: Hand[] }
 export type Frame = { people: Person[] }
 
-const MAX_PEOPLE = 6
-const COLOURS = ['#ffb347', '#ff6fb5', '#9cff6f', '#c58bff', '#ffe066', '#6fffe0']
+const MAX_PEOPLE = 4
+const COLOURS = ['#ffb347', '#ff6fb5', '#9cff6f', '#c58bff']
 const L_WRIST = 15
 const R_WRIST = 16
 
 // Give each detected hand to the person whose wrist is closest to it.
-function assignHands(bodies: Landmark[][], hands: Hand[]): Person[] {
-  const people: Person[] = bodies.map((body) => ({ body, hands: [] }))
+function assignHands(bodies: Landmark[][], ids: number[], hands: Hand[]): Person[] {
+  const people: Person[] = bodies.map((body, i) => ({ id: ids[i], body, hands: [] }))
   for (const hand of hands) {
     const w = hand.points[0]
     let best = -1
@@ -48,6 +49,7 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
   useEffect(() => {
     let landmarker: PoseLandmarker | undefined
     let hands: HandLandmarker | undefined
+    const tracker = new PersonTracker(MAX_PEOPLE)
     let stream: MediaStream | undefined
     let raf = 0
     let cancelled = false
@@ -83,15 +85,17 @@ export default function PoseCam({ onFrame }: { onFrame?: (frame: Frame) => void 
             const body = landmarker.detectForVideo(v, now)
             const hand = hands.detectForVideo(v, now)
             ctx.clearRect(0, 0, v.videoWidth, v.videoHeight)
+            const ids = tracker.update(body.landmarks, now)
             const people = assignHands(
               body.landmarks,
+              ids,
               hand.landmarks.map((points, i) => ({
                 side: hand.handedness[i]?.[0]?.categoryName ?? 'Unknown',
                 points,
               })),
             )
-            people.forEach((person, i) => {
-              const colour = COLOURS[i % COLOURS.length]
+            people.forEach((person) => {
+              const colour = COLOURS[person.id % COLOURS.length]
               draw.drawConnectors(person.body, PoseLandmarker.POSE_CONNECTIONS, { color: colour, lineWidth: 4 })
               draw.drawLandmarks(person.body, { color: '#fff', radius: 3 })
               for (const h of person.hands) {
