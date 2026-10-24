@@ -1,0 +1,215 @@
+# Shadow: how it works (deep dive)
+
+This explains what each part of Shadow does and why, so anyone can answer questions at the demo.
+**✅ Built** = working now. **🛠 Planned** = designed, not built yet. Updated as things land.
+
+---
+
+## 1. The big picture
+
+```
+ Browser (your laptop)                         Server (Docker image)                 Cloud services
+ ─────────────────────                         ─────────────────────                 ──────────────
+ Webcam ─► MediaPipe pose + hands  ✅          FastAPI backend  ✅                   Clerk (login)  ✅
+          ─► tracker (who is who)   ✅          ├─ /api/health, /api/config  ✅      Tiger Data (database)  ✅
+          ─► smoothing              ✅          ├─ login check on every route ✅     Gemini (agent)  🛠
+          ─► hands fused into body  ✅          ├─ upload + processing  🛠           ElevenLabs (voice)  🛠
+          ─► drawn on screen        ✅          ├─ scoring + learning engine  🛠
+                                                └─ serves the React app  ✅
+```
+
+- **Everything heavy about the live camera runs in the browser.** Video never leaves your laptop during practice; only numbers (keypoints) would.
+- **The server** handles login checks, uploads, scoring and the database.
+- **One Docker image** runs the whole server. The same image runs on your laptop, on a Hugging Face Space, or on a Vultr server later.
+
+---
+
+## 2. Live tracking in the browser ✅
+
+File: `frontend/src/pose/PoseCam.tsx`, with helpers `tracker.ts`, `smoothing.ts`, `appearance.ts`.
+
+Every new camera frame goes through five steps.
+
+### Step 1: Two AI models find the people and hands
+| Model | What it finds | Points |
+|---|---|---|
+| **MediaPipe Pose Landmarker (full)** | Each person's body: face, shoulders, elbows, wrists, hips, knees, ankles, feet | 33 per person, up to **4 people** |
+| **MediaPipe Hand Landmarker** | Each hand: wrist, palm knuckles and every finger joint | 21 per hand, up to 8 hands |
+
+- Both are Google models that run **in the browser on the graphics card** (WebGL), so no video is sent anywhere.
+- We use the **full** pose model (not "lite") for better accuracy on elbows, knees and feet.
+- The models only run when the camera delivers a **new** frame. Running twice on the same frame made the points jitter.
+- Points come back as x and y between 0 and 1 (fractions of the image), plus a depth estimate (z) and, for the body, a confidence score ("visibility").
+
+### Step 2: The tracker decides who is who
+MediaPipe returns people in a random order each frame. Without tracking, colours jumped between people. The tracker (`tracker.ts`) gives each person a **stable ID**:
+
+1. For every person it already knows, it **predicts** where they'll be now from their recent speed and direction.
+2. It scores every pairing of "known person" and "newly detected body":
+   - **distance** from the prediction, measured in *torso lengths* (so it works whether you're near or far from the camera);
+   - **change in size** (someone stepping towards the camera gets bigger gradually, not suddenly);
+   - **clothing colour difference** (see step 3).
+3. It pairs them **cheapest first**. A detection with no good match is either a **returning** person or a **new** one.
+4. A person keeps their ID for **1 second** after disappearing (brief occlusion), and their clothing is **remembered for 10 seconds** so they get their ID and colour back if they return.
+5. New people take the lowest free number, so colours are predictable: **orange, pink, green, purple**.
+
+### Step 3: Clothing-colour fingerprint (appearance matching)
+File: `appearance.ts`.
+
+- Each frame, a small copy of the image (192×108 pixels) is taken.
+- For each person, we sample the pixels inside their **torso** (shoulders to hips) and **upper legs** (hips to knees).
+- Each pixel is converted to **hue, saturation and brightness** and counted into a histogram of 108 colour "buckets". This is the person's colour fingerprint.
+- Two fingerprints are compared with the **Bhattacharyya coefficient**: 1 = identical colours, 0 = nothing in common.
+- A person's stored fingerprint is **blended slowly** (10% new each frame) so it adapts to lighting changes and turning around.
+- Limit: two people in very similar clothes (e.g. both in black) are told apart by position only.
+
+### Step 4: Smoothing (One Euro filter)
+File: `smoothing.ts`.
+
+Raw points shake slightly from frame to frame. We smooth **every point of every person** with a **One Euro filter**, the standard filter for this:
+- When a point moves **slowly**, it smooths **heavily**, so jitter disappears.
+- When a point moves **fast**, it smooths **lightly**, so it keeps up with the dance move with almost no lag.
+- Settings: body `minCutoff 1.7, beta 0.3`; fingers `minCutoff 2.0, beta 0.6`. A higher beta means less lag on fast movement; fingers get the most responsive setting because they move fastest.
+
+Also:
+- If a body point's confidence drops below 0.5, its **last good position is held for 250 ms** instead of flickering. After that it is hidden rather than drawn in the wrong place.
+- The hand model gives every point a confidence of 0 (it has no such score), so for hands the confidence check is skipped. *That was bug #39.*
+
+### Step 5: Fuse hands into the body
+- Each hand is attached to the person whose **wrist is closest** to it.
+- The pose model's body only has 3 rough points per hand. When a real hand is detected, its **precise wrist replaces the body's wrist**, and its **21 points replace the 3 rough ones**.
+- Result: one continuous skeleton per person, **33 body points + 21 per hand**, drawn in that person's colour.
+
+What leaves this component for scoring later: per person, `{ id, body: 33 points, hands: [{ side, 21 points }] }`.
+
+---
+
+## 3. Login and security ✅
+
+### How login works (Clerk)
+1. The browser asks the server for `/api/config`, which returns **only the public Clerk key**. This lets one build of the app work on any host.
+2. Clerk shows the sign-in screen (email or Google) and gives the browser a **session token**, a signed JWT that expires quickly.
+3. Every API call sends that token: `Authorization: Bearer <token>`.
+4. The server (`backend/app/auth.py`) **verifies the token's signature** against Clerk's public keys (downloaded from Clerk's JWKS address), and checks it hasn't expired and was issued by our Clerk app.
+5. If valid, the request runs as that user. The top line "API: user_…" proves this whole chain works.
+
+### Safety defaults
+- **Fails closed:** if Clerk isn't configured, every protected route **refuses** requests. Nothing is ever open by accident. Anonymous calls get **401**.
+- A test bypass exists for development only, and it is **off unless explicitly turned on** (`AUTH_TEST_BYPASS`).
+- **Secret keys never reach the browser.** They live in `.env` (never committed to git, readable only by the owner) and later in Hugging Face's secret store.
+- Locally, Docker publishes the app on **127.0.0.1 only**, so nobody on the venue Wi-Fi can reach it.
+
+---
+
+## 4. The server ✅ (partly)
+
+File: `backend/app/main.py`.
+
+| Route | What it does | Status |
+|---|---|---|
+| `GET /api/health` | Says the server is up and whether the database is connected | ✅ |
+| `GET /api/config` | Public settings for the browser (just the Clerk public key) | ✅ |
+| `GET /api/me` | Returns your user ID; proves login works | ✅ |
+| `/` | Serves the built React app | ✅ |
+| Upload, routines, sessions, live scoring | | 🛠 |
+
+- **FastAPI** (Python) with a small connection pool to the database (`db.py`).
+- Settings come from environment variables (`config.py`), so the same code runs everywhere.
+
+---
+
+## 5. The database (Tiger Data) ✅
+
+Tiger Data is **PostgreSQL with TimescaleDB** (fast time-series) and **pgvector** (similarity search). Free plan, US East region.
+Schema: `backend/migrations/001_init.sql`.
+
+| Table | Holds |
+|---|---|
+| `routines` | One per uploaded video: tempo, beat times, music fingerprint, lesson plan. **No audio or video** |
+| `eight_counts` | Each 8-count: timing, repeats, key moments, difficulty, the reference skeleton |
+| `moves` | Named moves (from routines and AIST++), with a **vector** for similarity search |
+| `mastery` | Your skill rating per move (Elo) |
+| `reviews` | When each move is next due for review (spaced repetition) |
+| `error_clusters` | Your recurring mistakes ("elbow drops on turns") |
+| `sessions` | Each practice session |
+| `rep_scores` | **Every rep you do**, stored as a time series (a TimescaleDB *hypertable*) |
+| `daily_progress` | A **continuous aggregate**: daily average and best score, reps and passes, kept up to date automatically for the progress page |
+
+---
+
+## 6. Running and deploying
+
+- **Locally:** `docker compose up -d --build`, then open http://127.0.0.1:7860.
+- **The Docker image:** stage 1 builds the React app with Node; stage 2 is Python with ffmpeg (video) and espeak-ng (for the Kokoro voice fallback), and serves everything on port 7860.
+- **Venue Wi-Fi gotcha:** eduroam blocks Docker's default DNS, so the container couldn't reach Clerk or the database (*bug #35*). A local, uncommitted `docker-compose.override.yml` points it at the Wi-Fi's own DNS servers.
+- **Hugging Face Space** 🛠: the same image, with HTTPS provided by Hugging Face and keys stored as Space secrets.
+- **Vultr** (optional later): `deploy/vultr/` puts the same image behind **Caddy**, which gets HTTPS certificates automatically, with only ports 80 and 443 open.
+
+---
+
+## 7. Planned features: how they'll work 🛠
+
+### Upload → course
+1. ffmpeg converts the video to 30 fps.
+2. **Beat This!** finds beats and downbeats → counts grid (two bars of 4/4 = one 8-count). A coarse music fingerprint (chroma + onset) is saved. **Then the audio is deleted.**
+3. **RTMW whole-body** pose (body + hands, like the live side) runs on each frame. **Then the frames are deleted.**
+4. Skeletons are normalised: centred on the hips, scaled by torso length (fair for any body size), mirrored.
+5. The routine is cut into 8-counts; repeats are found by comparing 8-counts with each other; key moments (hits, freezes, turns) are detected from speed.
+6. The **Gemini agent** builds the lesson tree with **chaining** (A, B, A+B, C, A+B+C) and a speed ladder (0.5×, 0.75×, 1×).
+
+### Scoring a rep
+- **DTW (dynamic time warping)** lines up your movement with the reference even if you're slightly early or late, so being late isn't also counted as the wrong shape.
+- Three scores: **shape** (angles of your limbs vs the reference), **timing** (do your hits land on the beat), **dynamics** (sharp vs smooth where it should be).
+- The single biggest fault becomes **one spoken cue**.
+
+### The learning engine
+- **Elo rating** per move: predicts your chance of passing a drill.
+- **Sweet spot:** the next drill is one you have a 70–85% chance of passing.
+- **Spaced repetition:** moves come back for review before you forget them; your rep score acts as the "how well did I remember" grade.
+- **Error clustering:** groups your mistakes into habits; if you keep failing a move, the coach **teaches that move** (key-pose freezes at 0.25×, legs only, arms only, then back up to speed).
+
+### Voice
+**ElevenLabs** voices (calm and hype), with every cue generated once and cached so it plays instantly; **Kokoro** (open source, runs on the server) as automatic fallback.
+
+### P1 extras
+- **Mic sync:** you play your own copy of the song; the app listens and lines it up with the stored fingerprint to know where you are and how fast it's playing.
+- **AIST++ calibration:** the same choreography danced by different experts tells us what a "good" score looks like, so 80 means the same in every routine. A labelled move library names moves.
+
+---
+
+## 8. Glossary
+
+| Term | Plain meaning |
+|---|---|
+| **Keypoint / landmark** | One tracked point on the body, like "left elbow" |
+| **Skeleton** | All of one person's keypoints joined by lines |
+| **MediaPipe** | Google's library of small AI models that run in the browser |
+| **Tracker / re-identification** | Keeping the same ID on the same person over time / recognising them when they return |
+| **Histogram** | A count of how many pixels fall into each colour bucket |
+| **One Euro filter** | Smoothing that's strong when still and light when moving fast |
+| **JWT** | A signed, expiring token that proves who you are |
+| **JWKS** | The public keys used to check a JWT's signature |
+| **Fail closed** | When something isn't set up, refuse access rather than allow it |
+| **Hypertable / continuous aggregate** | TimescaleDB's fast time-series table / a summary table that updates itself |
+| **pgvector** | Postgres extension for "find the most similar" searches |
+| **DTW** | Lines up two movements that happen at slightly different speeds |
+| **Elo** | The chess rating system, used here for move difficulty and your skill |
+| **Spaced repetition** | Reviewing things just before you'd forget them (as in Duolingo or Anki) |
+
+---
+
+## 9. Likely questions at the demo
+
+**"Is my video uploaded?"** During practice, never: tracking runs in your browser. For an uploaded routine, the video is deleted as soon as the skeleton and beats are extracted.
+
+**"How does it know who is who?"** A tracker predicts where each person will be, and checks position, size and clothing colour. It remembers people for 10 seconds if they leave.
+
+**"Why not just use one model for everything?"** The body model only has 3 rough points per hand, so we run a dedicated hand model too and fuse the two into one skeleton.
+
+**"Why is the skeleton smooth but not laggy?"** The One Euro filter smooths heavily only when you're still; when you move fast it barely smooths at all.
+
+**"Is it secure?"** Login is required for every API call, tokens are verified against Clerk's public keys, secret keys never reach the browser, and anything not configured refuses access.
+
+**"What about copyright?"** Uploaded audio is deleted after the beats are measured; Shadow never stores or plays the song. You play your own copy, or practise to a click track.
+
+**"What happens with several dancers?"** It tracks up to 4 people now; scoring follows the main dancer. Group mode (who's early or late on each count) is next.
