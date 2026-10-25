@@ -518,3 +518,5 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 .perch-msg { margin-bottom: 15px; } /* 5px higher */
 /* The camera fills its column (it sits under the crow perch) */
 .stage-col > .stage { width: 100%; align-self: stretch; }
+/* The little brand note under the hero text: shadow, crows, murder */
+.intro p.lore, .hero p.lore { font-size: 0.95rem; font-style: italic; color: #555; margin-top: 0.7rem; max-width: 52ch; }
