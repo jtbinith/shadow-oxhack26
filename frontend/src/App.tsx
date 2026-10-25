@@ -52,7 +52,8 @@ export default function App() {
       </header>
       <SignedOut>
         <section className="hero">
-          <p>Learn any dance from any video, with a coach that adapts to every rep.</p>
+          <h1>Hello.<br />Learn any dance.</h1>
+          <p>From any video, with a coach that adapts to every rep.</p>
           <SignInButton mode="modal" />
         </section>
       </SignedOut>

@@ -38,8 +38,13 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
   }
 
   return (
+    <>
+    <section className="intro">
+      <h1>Hello.<br />Learn any dance.</h1>
+      <p>Upload a dance video. Shadow cuts it into counts, builds you a lesson path, and coaches you live through your camera.</p>
+    </section>
     <div className="home">
-      <section className="card upload">
+      <section className="card upload" data-title="new-routine.mov">
         <h2>Learn a new routine</h2>
         <div
           className={`drop ${file ? 'has-file' : ''}`}
@@ -75,7 +80,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
         {error && <p className="error">{error}</p>}
       </section>
 
-      <section className="card">
+      <section className="card" data-title="my-routines">
         <h2>Your routines</h2>
         {routines === null && <p className="notice">Loading…</p>}
         {routines?.length === 0 && <p className="notice">None yet. Upload one above.</p>}
@@ -101,5 +106,6 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
         </button>
       </section>
     </div>
+    </>
   )
 }

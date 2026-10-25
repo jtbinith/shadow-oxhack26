@@ -18,7 +18,7 @@ export default function Processing({ routine }: { routine: Routine }) {
   const progress = detail('pose_progress')
   const next = STEPS.find((s) => !done.has(s.stage))
   return (
-    <section className="card processing">
+    <section className="card processing" data-title="building.log">
       <h2>Building “{routine.title}”</h2>
       <ol>
         {STEPS.map((s) => {

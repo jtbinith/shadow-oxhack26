@@ -54,14 +54,14 @@ export default function Progress({ routine, back, practise }: { routine: Routine
         }
         const weakest = [...byStep.entries()].map(([i, e]) => [i, e.sum / e.n] as const).sort((a, b) => a[1] - b[1])[0]
         return weakest && weakest[1] < 85 ? (
-          <div className="card weakest">
+          <div className="card weakest" data-title="weakest.txt">
             <h3>Weakest right now: {label(weakest[0])} (avg {Math.round(weakest[1])})</h3>
             <button className="primary" onClick={() => practise(weakest[0])}>Practise it now →</button>
           </div>
         ) : null
       })()}
 
-      <div className="card">
+      <div className="card" data-title="history">
         <h3>Score, rep by rep</h3>
         <div className="spark">
           {recent.map((r, i) => (
@@ -72,7 +72,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
       </div>
 
       <div className="grid2">
-        <div className="card">
+        <div className="card" data-title="mastery">
           <h3>Move mastery</h3>
           <table>
             <thead><tr><th>Phrase</th><th>Rating</th><th>Tier</th><th>Reps</th><th>Review</th></tr></thead>
@@ -86,7 +86,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
             </tbody>
           </table>
         </div>
-        <div className="card">
+        <div className="card" data-title="habits">
           <h3>Reps to learn</h3>
           <ul className="plain">
             {s.reps_to_learn.map((r) => <li key={r.step_index}>{label(r.step_index)}: {r.reps} reps{r.learnt ? '' : ' (not passed yet)'}</li>)}
