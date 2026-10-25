@@ -541,3 +541,6 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 .intro .dancing-crows { bottom: auto; top: 60%; right: 14%; transform: translateY(-50%); gap: 1rem; }
 
 @media (max-width: 1100px) { .intro .dancing-crows { display: none; } }
+/* Crash fallback */
+.crash { max-width: 640px; margin: 3rem auto; }
+.crash h2 { display: flex; align-items: center; gap: 0.6rem; }

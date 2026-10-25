@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ClerkProvider } from '@clerk/clerk-react'
 import App from './App'
+import ErrorBoundary from './ErrorBoundary'
 import './index.css'
 
 // The publishable key is fetched at runtime so one build works on every host.
@@ -17,7 +18,9 @@ function Root() {
   if (!key) return <p className="notice">Login isn't configured yet (CLERK_PUBLISHABLE_KEY).</p>
   return (
     <ClerkProvider publishableKey={key}>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </ClerkProvider>
   )
 }
