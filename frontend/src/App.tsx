@@ -10,6 +10,7 @@ import MyProgress from './pages/MyProgress'
 import QuickLink from './QuickLink'
 import Crow from './brand/Crow'
 import LoadingScreen from './brand/LoadingScreen'
+import DancingCrows from './brand/DancingCrows'
 import { useApi, type Routine } from './api'
 
 // Navigation lives in the browser history, so the browser / phone back button works everywhere.
@@ -64,6 +65,7 @@ export default function App() {
       </ClerkLoading>
       <SignedOut>
         <section className="hero">
+          <DancingCrows />
           <h1>Hello.<br />Learn any dance.</h1>
           <p>From any video, with a coach that adapts to every rep.</p>
           <p className="lore"><mark>You shadow the dancer, move for move. The crows are watching too: slip up and they gather.</mark></p>
