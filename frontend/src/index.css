@@ -90,6 +90,7 @@ button.link { background: none; border: 0; color: var(--ghost); cursor: pointer;
 .practice-head h2 { margin: 0; flex: 1; }
 .chip { background: #2a2536; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.9rem; }
 .stage { position: relative; }
+.ghost3d { position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; transform: scaleX(-1); border-radius: 12px; pointer-events: none; }
 .countin { position: absolute; inset: 0; display: grid; place-items: center; font-size: 9rem; font-weight: 800; color: var(--spot); text-shadow: 0 4px 30px #000; pointer-events: none; }
 .recording { position: absolute; top: 0.8rem; left: 0.8rem; color: #ff6b6b; font-weight: 700; background: rgba(0,0,0,0.5); padding: 0.2rem 0.6rem; border-radius: 6px; }
 .caller { position: absolute; bottom: 0.8rem; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.65); color: #fff; padding: 0.35rem 0.9rem; border-radius: 999px; font-size: 1.3rem; white-space: nowrap; pointer-events: none; }

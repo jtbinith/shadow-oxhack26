@@ -4,6 +4,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, boneMask, normaliseFrame, refFrame, scoreRep, type Drill, type Frame, type RefData, type RepScore, type UserSample } from '../coach/score'
 import { countInDelay, recordSnippet } from '../coach/micsync'
+import { Ghost3D } from '../coach/ghost3d'
 import { styleCue, styleFor } from '../coach/styles'
 
 // The parts of the Web Speech API we use (not in TypeScript's DOM types everywhere).
@@ -20,7 +21,7 @@ type SpeechRecognitionLike = {
 
 type Phase = 'loading' | 'ready' | 'countin' | 'dancing' | 'feedback'
 type Next = { action: 'practise' | 'next_step'; speed?: number; drill?: Drill; reason: string }
-type Reference = { fps: number; start: number; end: number; counts: number[]; points: number[][][] }
+type Reference = { fps: number; start: number; end: number; counts: number[]; points: number[][][]; world?: number[][][] }
 
 const DRILL_LABEL: Record<Drill, string> = { full: 'Full move', freeze: 'Key-pose freezes', arms: 'Arms only', legs: 'Legs only', half: 'Toughest half' }
 
@@ -189,6 +190,13 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const [countLabel, setCountLabel] = useState('')
   // The move called on each count of the reference ("Arms up", "Step right"), parallel to its counts.
   const moveNames = useRef<string[]>([])
+  // 3D world landmarks per reference frame (parallel to ref.frames), for the 3D ghost.
+  const worldFrames = useRef<number[][][]>([])
+  const ghostCanvas = useRef<HTMLCanvasElement>(null)
+  const ghost3d = useRef<Ghost3D | null>(null)
+  const [ghostMode, setGhostMode] = useState<'3d' | 'flat'>('3d')
+  const ghostModeRef = useRef(ghostMode)
+  ghostModeRef.current = ghostMode
   const [calling, setCalling] = useState<{ count: number; name: string } | null>(null)
   const ref = useRef<RefData | null>(null)
   const session = useRef<string | null>(null)
@@ -248,9 +256,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       const counts: number[] = []
       const hits: number[] = []
       const names: string[] = []
+      const world: number[][][] = []
       let offset = 0
       refs.forEach((r, k) => {
         frames.push(...r.points.map(refFrame))
+        world.push(...r.points.map((_, j) => r.world?.[j] ?? []))
         counts.push(...r.counts.map((c) => c - r.start + offset))
         const ec = routine.eight_counts.find((e) => e.idx === step.eight_counts[k])
         names.push(...r.counts.map((_, j) => ec?.moves?.[j]?.name ?? ''))
@@ -271,8 +281,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           hits: hits.filter((h) => (useFirst ? h < mid : h >= mid)).map((h) => h - (useFirst ? 0 : mid)),
         }
         moveNames.current = names.filter((_, j) => (useFirst ? counts[j] < mid : counts[j] >= mid))
+        worldFrames.current = world.slice(from, to)
       } else {
         moveNames.current = names
+        worldFrames.current = world
       }
       ref.current = data
       session.current = s.id
@@ -302,6 +314,19 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     }
     v.pause()
   }, [phase, videoUrl, speed, seg.start, seg.end])
+
+  useEffect(() => {
+    if (!ghostCanvas.current) return
+    try {
+      ghost3d.current = new Ghost3D(ghostCanvas.current)
+    } catch {
+      setGhostMode('flat') // no WebGL: fall back to the flat ghost
+    }
+    return () => {
+      ghost3d.current?.dispose()
+      ghost3d.current = null
+    }
+  }, [])
 
   // Call the moves like a teacher would: the current count and its move, during the rep.
   useEffect(() => {
@@ -525,7 +550,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const overlay = useCallback((ctx: CanvasRenderingContext2D, people: Person[], dancerId: number | null) => {
     const r = ref.current
     const c = clock.current
-    if (!r || !(c.phase === 'dancing' || c.phase === 'countin' || c.phase === 'ready')) return
+    if (!r || !(c.phase === 'dancing' || c.phase === 'countin' || c.phase === 'ready')) {
+      ghost3d.current?.clear()
+      return
+    }
     let t = c.phase === 'dancing' ? ((performance.now() - c.start) / 1000) * c.speed : 0
     if (c.drill === 'freeze') {
       // Hold each count's key shape instead of flowing between them.
@@ -553,7 +581,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       if (err > worstErr && c.phase === 'dancing') { worstErr = err; worstBone = i }
       return err < 15 ? 'rgba(120,255,140,0.75)' : err < 30 ? 'rgba(255,200,60,0.75)' : 'rgba(255,90,90,0.8)'
     })
-    drawBodyGhost(ctx, rf, at, colours)
+    if (ghostModeRef.current === '3d' && ghost3d.current) {
+      ghost3d.current.render(rf, worldFrames.current[j] ?? null, at, colours, w, h)
+    } else {
+      ghost3d.current?.clear()
+      drawBodyGhost(ctx, rf, at, colours)
+    }
     // The arrow: from where your limb's tip is to where the routine wants it.
     if (worstBone >= 0 && mine) {
       const [a, b] = BONES[worstBone]
@@ -613,6 +646,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         <button className="link" onClick={onExit}>← Lesson tree</button>
         <h2>{title}</h2>
         <span className="chip">{speed}× · {DRILL_LABEL[drill]}</span>
+        <button className="chip" onClick={() => setGhostMode((m) => (m === '3d' ? 'flat' : '3d'))} title="Switch the ghost between 3D and flat">
+          👻 {ghostMode === '3d' ? '3D ghost' : 'Flat ghost'}
+        </button>
         <button className="chip persona" onClick={() => setPersona((p) => (p === 'hype' ? 'calm' : 'hype'))} title="Switch coach voice">
           🎤 {persona === 'hype' ? 'Callum (cheeky)' : 'Laura (sassy)'}
         </button>
@@ -620,6 +656,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       <div className="stage-row">
         <div className="stage">
           <PoseCam onFrame={onFrame} overlay={overlay} />
+          <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
           {phase === 'dancing' && <div className="recording">● dancing</div>}
           {calling && (

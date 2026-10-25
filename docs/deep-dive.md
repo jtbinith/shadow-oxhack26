@@ -245,3 +245,7 @@ Schema: `backend/migrations/001_init.sql`.
 **"What about copyright?"** Uploaded audio is deleted after the beats are measured; Shadow never stores or plays the song. The preview video is silent. You play your own copy, or practise to a click track.
 
 **"What happens with several dancers?"** It tracks up to 4 people now; scoring follows the main dancer. Group mode (who's early or late on each count) is next.
+
+
+## 3D ghost
+`frontend/src/coach/ghost3d.ts`. A Three.js mannequin (cylinders + joint balls, a tapered torso oriented by the shoulder and hip lines, head and feet) drawn on a transparent WebGL canvas over the camera. x/y come from the same 2D reference points as the flat ghost, so it sits on the learner exactly as before; depth comes from MediaPipe's 3D world landmarks for that frame, scaled so the 3D torso matches the 2D torso. An orthographic camera in canvas pixels keeps the projection identical, so the 3D adds shading, thickness and limbs passing in front of or behind the body. Limbs keep the green/amber/red closeness colours. Falls back to the flat ghost without WebGL; toggle in the practice header.

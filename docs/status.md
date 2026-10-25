@@ -15,7 +15,7 @@ Gemini (planning model `gemini-3.5-flash-lite`; 3.8-flash was ~55 s/call), Tiger
 ## Built ✅
 - **Live tracking** (browser): BlazePose (fast/standard/high = lite/full/heavy) + Hands fused into one skeleton, up to 4 people, tracker (motion + clothing colour + OSNet re-ID in a worker), One Euro smoothing, phantom filter, **focus mode** (crop around the dancer, full scan every 10 frames), dancer lock ("YOU", click to choose), FPS meter.
 - **Upload → course** (backend): ffmpeg 30 fps → librosa beats/downbeats/fingerprint → **audio deleted** → MediaPipe pose → **silent video kept** (private, for preview) → normalise (pixels, torso units) → 8-counts, repeats, hits/freezes/**turns**, difficulty → Gemini plan (validated; rules fallback). Style picked at upload.
-- **Practice**: count-in + click track, **body-silhouette ghost** (limbs green/amber/red) + **arrow** to the target, **original video beside the camera** (loops / syncs at speed), speeds **0.25–1×**, drills full/freeze/arms/legs/half, mid-rep "lost" stop, scoring = DTW shape + hit timing + dynamics, **6 style profiles** (weights, tau, watched limbs, vocab: dhol/snare/sollukattu), one spoken cue in **body directions** (higher / out wider / in closer — no degrees/ms), detailed notes, worst-count replay.
+- **Practice**: count-in + click track, **3D ghost** (Three.js mannequin, depth from the reference's 3D world landmarks, lit and shaded; flat-ghost toggle; limbs green/amber/red) + **arrow** to the target, **original video beside the camera** (loops / syncs at speed), speeds **0.25–1×**, drills full/freeze/arms/legs/half, mid-rep "lost" stop, scoring = DTW shape + hit timing + dynamics, **6 style profiles** (weights, tau, watched limbs, vocab: dhol/snare/sollukattu), one spoken cue in **body directions** (higher / out wider / in closer — no degrees/ms), detailed notes, worst-count replay.
 - **Learning engine** (`backend/app/coach/engine.py`): Elo per 8-count, sweet-spot speed (70–85%), 2 passes → next tier, 3 fails → same-move breakdown, 4 → half drill, spaced repetition.
 - **Agents (Gemini tool loops)**: "Tell the coach" re-plan (get_progress / get_habits / get_lesson_plan / update_lesson_plan) and **Ask the coach** mid-practice (data prefetched, `suggest_drill` tool, ~5 s, spoken).
 - **Voice**: ElevenLabs via `/api/tts`, cached per line in Tiger Data, rationed; browser voice fallback; persona toggle.
@@ -30,7 +30,7 @@ Gemini (planning model `gemini-3.5-flash-lite`; 3.8-flash was ~55 s/call), Tiger
 ## Not built / honest gaps ❌
 - Move names are rules, not a trained classifier; noisy on fast or side-on footage.
 - Mic sync not yet tried with a real speaker + laptop mic (only synthetic tests).
-- Group mode, true 3D mesh ghost, sections, HF deploy.
+- Group mode, sections, HF deploy.
 - No trained correction model (no open dance-correction dataset available tonight; Ego-Exo4D needs ~2-day licence).
 
 ## Next (suggested order)
