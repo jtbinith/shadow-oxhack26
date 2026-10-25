@@ -1005,7 +1005,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           {phase === 'paused' && <div className="recording paused">Paused</div>}
           {phase === 'flowing' && calling && (
             <div className="caller">
-              <b>{calling.count}</b> {calling.name}
+              <b>Count {calling.count}</b> {calling.name}
             </div>
           )}
         </div>
@@ -1025,9 +1025,17 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {phase === 'ready' && (
         <>
           {firstMoves?.length ? (
-            <ol className="movelist" aria-label="The moves">
-              {firstMoves.map((m) => <li key={m.count}><b>{m.count}</b>{m.name}</li>)}
-            </ol>
+            <section className="counts-list">
+              <h3>The counts <span className="notice">{phraseName(routine, startIdx)}, one move per count</span></h3>
+              <ol className="movelist">
+                {firstMoves.map((m) => (
+                  <li key={m.count}>
+                    <span className="count-no"><small>Count</small>{m.count}</span>
+                    <span className="count-move">{m.name || 'Hold'}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
           ) : null}
           <div className="controls">
             <button className="primary" onClick={() => begin()}>Start flowing ({speed}×)</button>

@@ -156,9 +156,14 @@ span.chip { cursor: default; }
 .refpanel video { width: 100%; background: #000; transform: scaleX(-1); flex: 1; min-height: 0; max-height: 45vh; object-fit: cover; border: 2px solid var(--edge); box-shadow: var(--shadow); box-sizing: border-box; }
 .askpanel { width: 24%; min-width: 210px; display: flex; flex-direction: column; }
 @media (max-width: 900px) { .stage-row { flex-direction: column; } .refpanel, .askpanel { width: 100%; } .refpanel video { max-height: 40vh; } }
-.movelist { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 1.2rem 0 0.4rem; padding: 0; list-style: none; font-size: 0.95rem; }
-.movelist li { background: var(--paper); border: var(--line); padding: 0.1rem 0.55rem; font-weight: 600; }
-.movelist b { margin-right: 0.35rem; }
+.counts-list { margin: 1.4rem 0 0.4rem; }
+.counts-list h3 { margin: 0 0 0.6rem; font-size: 1.3rem; }
+.counts-list h3 .notice { font-size: 0.95rem; font-weight: 500; margin-left: 0.4rem; }
+.movelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.movelist li { display: flex; align-items: stretch; background: var(--paper); border: var(--line); box-shadow: 3px 3px 0 var(--edge); }
+.count-no { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 3.2rem; background: var(--ink); color: var(--paper); font-size: 1.6rem; font-weight: 800; line-height: 1; padding: 0.35rem 0.3rem; }
+.count-no small { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.8; margin-bottom: 0.15rem; }
+.count-move { padding: 0.45rem 0.6rem; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem; margin: 1rem 0; }
 .controls label { font-weight: 600; }
 button.icon { padding: 0.45rem 0.6rem; line-height: 0; display: inline-grid; place-items: center; }
