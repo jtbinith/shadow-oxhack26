@@ -1,0 +1,12 @@
+[
+ ["intro", "This is Shadow. Learn any dance, from any video."],
+ ["problem", "Learning choreography from a video means pausing, rewinding, and guessing. Nobody tells you what's wrong on this attempt."],
+ ["upload", "Upload any dance video. Shadow finds the beat, cuts the routine into eight-counts, and names the moves. No music? It finds the rhythm in the movement."],
+ ["plan", "Then it builds your lesson plan. Learn each eight-count on its own, join them up at checkpoints, and earn bronze, silver and gold as you reach full speed."],
+ ["practice", "Now you dance. The original video plays beside your camera, a 3D ghost dancer guides you, and your limbs turn green, amber or red."],
+ ["murder", "Small slips are fine. But keep getting it wrong, and the crows start to gather. Just a crow. An attempted murder. And at three... it's a murder! Shadow stops, shows you exactly what to fix, and carries on the moment you match the pose."],
+ ["voice", "Talk to it, hands-free. Say slower, and it slows down instantly. Ask how to fix your arms, and the coach answers out loud, then acts on it."],
+ ["progress", "Every eight-count is a rep. Shadow tracks your mastery, brings moves back before you forget them, and spots your habits across every routine."],
+ ["tech", "Under the hood, pose tracking runs in your browser, so your video never leaves your device. Gemini plans and coaches. ElevenLabs gives it a voice. Tiger Data stores every rep as time series. And Clerk keeps it yours."],
+ ["outro", "Shadow. You shadow the dancer, move for move. The crows are watching too."]
+]
