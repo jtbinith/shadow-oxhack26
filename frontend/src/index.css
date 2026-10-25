@@ -426,14 +426,16 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 }
 .loading-crow { display: flex; align-items: center; gap: 0.8rem; padding: 2rem 0; font-weight: 700; }
 .building { display: flex; align-items: flex-end; gap: 0.7rem; }
-/* Loading screen: the hopping-crow GIF in a window */
+/* Loading: the hopping-crow GIF in a window, everywhere */
 .loading-screen { display: grid; place-items: center; min-height: 60vh; }
-.loading-screen .window { padding: 0 2.4rem 1.4rem; text-align: center; color: var(--ink); }
-.loading-screen .window[data-title]::before { margin: 0 -2.4rem 1rem; }
-.loading-screen img { display: block; margin: 0 auto; image-rendering: auto; }
-.loading-screen p { margin: 0.4rem 0 0; font-weight: 800; font-size: 1.2rem; }
-.loading-inline { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; margin: 0.6rem 0; }
-.loading-inline img { background: var(--paper); border: var(--line); }
+.loading-window { padding: 0 2.4rem 1.4rem; text-align: center; color: var(--ink); width: max-content; max-width: 100%; box-sizing: border-box; }
+.loading-window[data-title]::before { margin: 0 -2.4rem 1rem; }
+.loading-window img { display: block; margin: 0 auto; }
+.loading-window p { margin: 0.4rem 0 0; font-weight: 800; font-size: 1.2rem; }
+.loading-window.small { padding: 0 1.2rem 0.8rem; align-self: center; }
+.loading-window.small[data-title]::before { margin: 0 -1.2rem 0.6rem; }
+.loading-window.small p { font-size: 0.95rem; }
+.loading-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(0, 0, 0, 0.6); }
 /* Logo: a white crow in a black rounded square */
 .logo-mark { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 12px; background: var(--ink); color: var(--paper); flex-shrink: 0; }
 .logo-mark .crow { color: var(--paper); margin: 4px 0 0 2px; }

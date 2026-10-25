@@ -1,16 +1,13 @@
-// The loading screen: the hopping crow (the brand GIF) in a window, with what's loading.
-// compact = a small inline version for loading inside a card.
-export default function LoadingScreen({ label = 'Loading…', compact = false }: { label?: string; compact?: boolean }) {
-  return compact ? (
-    <p className="loading-inline" role="status">
-      <img src="/crow-hop.gif" alt="" width={54} height={60} /> {label}
-    </p>
-  ) : (
-    <div className="loading-screen" role="status">
-      <div className="window" data-title="loading">
-        <img src="/crow-hop.gif" alt="" width={180} height={200} />
-        <p>{label}</p>
-      </div>
+// The loading window: the hopping crow (the brand GIF) with what's loading. One look everywhere.
+// overlay = pops up over the page with a dimmed backdrop; small = a compact window inside a panel.
+export default function LoadingScreen({ label = 'Loading…', overlay = false, small = false }: { label?: string; overlay?: boolean; small?: boolean }) {
+  const win = (
+    <div className={`window loading-window ${small ? 'small' : ''}`} data-title="loading" role="status">
+      <img src="/crow-hop.gif" alt="" width={small ? 90 : 180} height={small ? 100 : 200} />
+      <p>{label}</p>
     </div>
   )
+  if (overlay) return <div className="loading-overlay">{win}</div>
+  if (small) return win
+  return <div className="loading-screen">{win}</div>
 }

@@ -1099,7 +1099,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           )}
         </div>
         <div className="refpanel">
-          {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <p className="notice">Loading the routine video…</p>}
+          {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <LoadingScreen small label="Loading the video…" />}
           <RunProgress now={() => (S.current.end ? Math.max(0, Math.min(1, (videoUrl && video.current ? video.current.currentTime - S.current.secStart : S.current.perf.base) / S.current.end)) : 0)}
             marks={S.current.segs.map((x) => (S.current.end ? x.off / S.current.end : 0))} />
           <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
@@ -1109,7 +1109,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {note && <p className="notice flow-note">{note}</p>}
 
       {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
-      {phase === 'loading' && <LoadingScreen compact label="Loading the routine…" />}
+      {phase === 'loading' && <LoadingScreen overlay label="Loading the routine…" />}
 
       {phase === 'ready' && (
         <>

@@ -93,7 +93,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
 
       <section className="card" data-title="my-routines">
         <h2>Your routines</h2>
-        {routines === null && <LoadingScreen compact label="Loading your routines…" />}
+        {routines === null && <LoadingScreen small label="Loading your routines…" />}
         {routines?.length === 0 && <p className="notice">None yet. Upload one above.</p>}
         <ul className="routines">
           {routines?.map((r) => (
