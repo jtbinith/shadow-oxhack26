@@ -66,7 +66,7 @@ export default function App() {
         <section className="hero">
           <h1>Hello.<br />Learn any dance.</h1>
           <p>From any video, with a coach that adapts to every rep.</p>
-          <p className="lore">You shadow the dancer, move for move. The crows are watching too: slip up and they gather, and a gathering of crows is called a murder.</p>
+          <p className="lore"><mark>You shadow the dancer, move for move. The crows are watching too: slip up and they gather, and a gathering of crows is called a murder.</mark></p>
           <SignInButton mode="modal" />
         </section>
       </SignedOut>

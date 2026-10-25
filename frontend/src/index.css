@@ -521,5 +521,4 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* The little brand note under the hero text: shadow, crows, murder */
 .intro p.lore, .hero p.lore { font-size: 0.95rem; font-style: italic; color: #555; margin-top: 0.7rem; max-width: 52ch; }
 /* Highlighted like a marker pen: the CTA blue at low opacity, so the text stays readable */
-.intro p.lore, .hero p.lore { display: inline; color: var(--ink); background: rgba(43, 108, 255, 0.18); padding: 0.1rem 0.35rem; box-decoration-break: clone; -webkit-box-decoration-break: clone; line-height: 1.7; }
-.intro p.lore::before, .hero p.lore::before { content: ''; display: block; margin-top: 0.7rem; }
+.lore mark { color: var(--ink); background: rgba(43, 108, 255, 0.18); padding: 0.1rem 0.35rem; box-decoration-break: clone; -webkit-box-decoration-break: clone; line-height: 1.7; }
