@@ -2,6 +2,14 @@
 
 Hacking ends **Sun 12:00**. Repo: github.com/jtbinith/shadow-oxhack26 (private). Board: github.com/users/jtbinith/projects/5 (update with `scripts/board.sh`).
 
+## Latest (Sun 25 Oct, ~06:40), read this first after compaction
+- **Brand: crows.** Mascot `frontend/src/brand/Crow.tsx` (no wings; `inverse` = white crow, solid black eye). Logo = white crow in a black rounded square (favicon `public/favicon.svg`, `docs/brand/logo.svg`). Hopping loop `HoppingCrow.tsx` + GIF `docs/brand/crow-hop.gif` (2 s: big hop, smaller hop). Loading windows `brand/LoadingScreen.tsx` (overlay / small). Guide `docs/brand/identity.md`.
+- **Murder meter** (`coach/murder.ts`, tests): pressure from `MistakeDetector.pressure()`; crows land one at a time (≥450 ms apart) on `brand/MurderPerch.tsx` ABOVE the camera (never on it): 1 = "Just a crow…", 2 = "An attempted murder…", 3 at the threshold = red bubble "It's a murder!" (flow stops). Speech bubbles: no outline, equilateral 45° tail. Dev page **/crow-test.html** (`?p=0.85`, slider, Play, Reset clears instantly).
+- **UI:** retro monochrome windows on a black page, Baloo 2 (title too). Colours: green start/play, red stop/pause, blue CTA. Quick-link tiles for nav; hover colour flips; ⓘ InfoTip explains medals/checkpoints. Lesson plan = compact 8-count cards (video thumbs) + checkpoint bar (rounded squares on the line). My progress page (all routines; habits = cross-routine patterns). Streak only on My progress. No XP.
+- **Practice:** continuous flow, hands-free mic (echo-safe), live captions, one voice at a time (count-in waits for the coach), Eleven v4 voice, count-in words in the coach's voice scheduled on the beat.
+- **Data:** routines renamed to hip-hop/Kuthu names; 6 demo routines (`is_demo`, `python -m scripts.seed_demo [--wipe]`); uploads up to 10 min; names required + unique (migration 009); 010 = is_demo. Counts per phrase are automatic (8, or 4; no music → beat from movement).
+- **Open ideas:** planner prompt should know phrase length (said "8-count" for a 4-count); hand/foot directions in the detector; real-speaker test of mic sync.
+
 ## How to run (local dev)
 - Backend: `backend/.venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 7860 --reload --reload-dir backend` (run from repo root so `.env` loads)
 - Frontend: `cd frontend && npm run dev -- --port 5173` → **http://127.0.0.1:5173** (proxies /api to 7860)
