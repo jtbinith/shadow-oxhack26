@@ -42,6 +42,7 @@ function RoutineView({ id }: { id: string }) {
   const api = useApi()
   const [routine, setRoutine] = useState<Routine | null>(null)
   const [practising, setPractising] = useState<number | null>(null)
+  const [wholeRoutine, setWholeRoutine] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
   const [reload, setReload] = useState(0)
   useEffect(() => {
@@ -69,11 +70,12 @@ function RoutineView({ id }: { id: string }) {
   if (practising !== null && steps[practising]) {
     return (
       <Practice
-        key={practising}
+        key={`${practising}-${wholeRoutine}`}
         routine={routine}
         stepIndex={practising}
         step={steps[practising]}
-        onExit={() => setPractising(null)}
+        mode={wholeRoutine ? 'routine' : 'step'}
+        onExit={() => { setPractising(null); setWholeRoutine(false); setReload((n) => n + 1) }}
         onNextStep={() => setPractising(practising + 1 < steps.length ? practising + 1 : null)}
       />
     )
@@ -89,5 +91,5 @@ function RoutineView({ id }: { id: string }) {
         }}
       />
     )
-  return <LessonTree routine={routine} practise={setPractising} showProgress={() => setShowProgress(true)} replanned={() => setReload((n) => n + 1)} />
+  return <LessonTree routine={routine} practise={(i) => { setWholeRoutine(false); setPractising(i) }} flowAll={() => { setWholeRoutine(true); setPractising(0) }} showProgress={() => setShowProgress(true)} replanned={() => setReload((n) => n + 1)} />
 }

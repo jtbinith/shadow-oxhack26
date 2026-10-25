@@ -20,9 +20,10 @@ function moveName(routine: Routine, step: Step) {
 
 // A Duolingo-style path: a step unlocks when the one before it has been passed at any speed;
 // bronze / silver / gold = passed at 0.5× / 0.75× / 1×.
-export default function LessonTree({ routine, practise, showProgress, replanned }: {
+export default function LessonTree({ routine, practise, flowAll, showProgress, replanned }: {
   routine: Routine
   practise: (index: number) => void
+  flowAll: () => void
   showProgress: () => void
   replanned: () => void
 }) {
@@ -62,6 +63,7 @@ export default function LessonTree({ routine, practise, showProgress, replanned 
         </p>
         {routine.lesson_plan.summary && <p>{routine.lesson_plan.summary}</p>}
         <div className="tree-actions">
+          <button className="primary" onClick={flowAll} title="Dance the whole routine in one continuous run, stopping only on noticeable mistakes">▶ Flow the whole routine</button>
           <button className="link" onClick={showProgress}>See progress →</button>
           <form
             className="replan"

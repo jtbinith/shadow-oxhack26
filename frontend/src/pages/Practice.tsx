@@ -47,12 +47,15 @@ const LOST_AFTER_S = 2.5
 const HOLD_S = 0.8
 const ALL_BONES = Array(BONES.length).fill(true)
 
-export default function Practice({ routine, stepIndex, step, onExit, onNextStep }: {
+// mode 'step': flow through one lesson-tree step; a clean run (no stops) passes it.
+// mode 'routine': the whole routine in one continuous run-through.
+export default function Practice({ routine, stepIndex, step, onExit, onNextStep, mode = 'step' }: {
   routine: Routine
   stepIndex: number
   step: Step
   onExit: () => void
   onNextStep: () => void
+  mode?: 'step' | 'routine'
 }) {
   const api = useApi()
   const { getToken } = useAuth()
@@ -60,14 +63,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const [phase, setPhase] = useState<Phase>('loading')
   const [speed, setSpeed] = useState(step.start_speed)
   const [sensitivity, setSensitivity] = useState<Sensitivity>('normal')
-  const [scope, setScope] = useState<'end' | 'step'>('end')
+  const [scope, setScope] = useState<'end' | 'step'>(mode === 'routine' ? 'end' : 'step')
   const [countLabel, setCountLabel] = useState('')
   const [calling, setCalling] = useState<{ seg: number; count: number; name: string } | null>(null)
   const [pause, setPause] = useState<Pause | null>(null)
   const [held, setHeld] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [habit, setHabit] = useState<string | null>(null)
-  const [summary, setSummary] = useState<{ clean: number; pauses: number; trickiest: number | null } | null>(null)
+  const [summary, setSummary] = useState<{ clean: number; pauses: number; trickiest: number | null; passed: boolean | null; relaxed: boolean } | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [persona, setPersona] = useState<'calm' | 'hype'>('hype')
   const [ghostMode, setGhostMode] = useState<'3d' | 'flat'>('3d')
@@ -109,6 +112,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     pausesAt: new Map<number, number>(),
     slowed: false,
     stats: { clean: 0, pauses: 0 },
+    segScores: [] as number[], // this run's clean 8-count scores
     session: null as string | null,
     timers: [] as number[],
     music: false,
@@ -121,7 +125,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const snapshot = useRef<HTMLCanvasElement>(null)
 
   // Which 8-counts flow: from this step's first one to the end of the routine (or just this step, on repeat).
-  const startIdx = step.eight_counts[0]
+  const startIdx = mode === 'routine' ? routine.eight_counts[0]?.idx ?? 0 : step.eight_counts[0]
   const idxs = scope === 'step' ? step.eight_counts : routine.eight_counts.map((e) => e.idx).filter((i) => i >= startIdx)
   const idxKey = idxs.join(',')
 
@@ -277,10 +281,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   }, [halt, play, seek])
 
   // ---- record an 8-count as a rep (feeds mastery, habits and the coach) ----
-  const recordSeg = useCallback(async (k: number, failed: Mistake | null, count = 1) => {
+  // asStep: record the whole lesson-tree step at the end of a run (clean run = pass).
+  const recordSeg = useCallback(async (k: number, failed: Mistake | null, count = 1, asStep?: { clean: boolean }): Promise<boolean | null> => {
     const st = S.current
     const seg = st.segs[k]
-    if (!seg || !st.session) return
+    if (!seg || !st.session) return null
     const score = scoreRep(st.samples, seg.ref, 'full', { weights: style.weights, tauMs: style.tauMs, watched: style.watched, vocabulary: (f) => styleCue(style, f) })
     const plan = routine.lesson_plan.steps ?? []
     const owner = plan.findIndex((s) => s.type === 'learn' && s.eight_counts[0] === seg.idx)
@@ -289,16 +294,20 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         ? { type: 'shape', count, body_part: failed.part.replace(' ', '_'), direction: failed.direction }
         : { type: failed.kind === 'early' ? 'early' : failed.kind === 'late' ? 'late' : 'soft', count }
       : score.topFault
+    if (!failed) st.segScores.push(score.similarity)
+    const mean = st.segScores.length ? st.segScores.reduce((a, b) => a + b, 0) / st.segScores.length : score.similarity
+    // In the flow, the stop detector is the judge: a run with no stops (not on relaxed) passes the step.
+    const similarity = asStep ? (asStep.clean ? Math.max(mean, 80) : Math.min(mean, 60)) : failed ? Math.min(score.similarity, 60) : score.similarity
     try {
       const res = await api<{ passed: boolean; habit: string | null }>(`/api/routines/${routine.id}/sessions/${st.session}/reps`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          step_index: owner >= 0 ? owner : stepIndex,
-          eight_counts: [seg.idx],
+          step_index: asStep ? stepIndex : owner >= 0 ? owner : stepIndex,
+          eight_counts: asStep ? step.eight_counts : [seg.idx],
           speed: st.speed,
           drill: 'full',
-          similarity: failed ? Math.min(score.similarity, 60) : score.similarity,
+          similarity: Math.round(similarity),
           shape: score.shape,
           timing: score.timing,
           per_count: score.perCount,
@@ -307,8 +316,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         }),
       })
       setHabit(res.habit)
-    } catch { /* offline: keep flowing */ }
-  }, [api, routine.id, routine.lesson_plan.steps, stepIndex, style])
+      return res.passed
+    } catch {
+      return null // offline: keep flowing
+    }
+  }, [api, routine.id, routine.lesson_plan.steps, step.eight_counts, stepIndex, style])
 
   // ---- pause: on a mistake, on losing the dancer, or by hand ----
   const stopFor = useCallback((m: Mistake | null, why: 'mistake' | 'lost' | 'manual' = 'mistake') => {
@@ -364,13 +376,16 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     return () => window.clearTimeout(id)
   }, [held, phase, redo, say])
 
-  const finishSection = useCallback(() => {
+  const finishSection = useCallback((passed: boolean | null = null) => {
     const st = S.current
     halt()
     const tricky = [...st.pausesAt.entries()].sort((a, b) => b[1] - a[1])[0]
-    setSummary({ clean: st.stats.clean, pauses: st.stats.pauses, trickiest: tricky ? st.segs[tricky[0]]?.idx ?? null : null })
+    const relaxed = sensitivityRef.current === 'relaxed'
+    setSummary({ clean: st.stats.clean, pauses: st.stats.pauses, trickiest: tricky ? st.segs[tricky[0]]?.idx ?? null : null, passed, relaxed })
     setPhase('done')
-    void say(st.stats.pauses === 0 ? 'Flawless. You flowed straight through!' : 'Nice work. You made it to the end.')
+    void say(passed ? 'Step passed! The next one is unlocked.'
+      : scopeRef.current === 'step' && st.stats.pauses > 0 ? 'You made it through. One clean run without a stop passes the step. Go again!'
+        : st.stats.pauses === 0 ? 'Flawless. You flowed straight through!' : 'Nice work. You made it to the end.')
   }, [halt, say])
 
   // ---- every camera frame ----
@@ -391,11 +406,17 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     if (st.phase !== 'flowing' || !st.all) return
     const t = now()
     if (t >= st.end - 0.02) {
-      // End of the section: the last 8-count passes if we got here without a stop.
+      // End of the run. In a step: record the step (a run with no stops passes it).
       st.stats.clean++
-      void recordSeg(st.seg, null)
-      if (scopeRef.current === 'step') flowFrom(0)
-      else finishSection()
+      if (scopeRef.current === 'step') {
+        const clean = st.stats.pauses === 0 && sensitivityRef.current !== 'relaxed'
+        halt()
+        setPhase('done')
+        void recordSeg(st.seg, null, 1, { clean }).then((passed) => finishSection(passed))
+      } else {
+        void recordSeg(st.seg, null)
+        finishSection()
+      }
       return
     }
     // Into the next 8-count: the one before went cleanly.
@@ -514,6 +535,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     st.speed = sp
     st.slowed = false
     st.stats = { clean: 0, pauses: 0 }
+    st.segScores = []
     st.pausesAt = new Map()
     setNote(null)
     setCoachAnswer(null)
@@ -832,9 +854,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     }
   }, [handsFree, Recognition, speak])
 
-  const title = scope === 'step'
-    ? (step.type === 'chain' ? `8-counts ${step.eight_counts.map((i) => i + 1).join('+')}, on repeat` : `8-count ${startIdx + 1}, on repeat`)
-    : `From 8-count ${startIdx + 1} to the end`
+  const title = mode === 'routine' ? 'The whole routine'
+    : scope === 'step' ? (step.type === 'chain' ? `Checkpoint: 8-counts ${step.eight_counts.map((i) => i + 1).join('+')}` : `8-count ${startIdx + 1}`)
+      : `From 8-count ${startIdx + 1} to the end`
   const firstMoves = routine.eight_counts.find((e) => e.idx === startIdx)?.moves
   const segNo = (k: number) => (S.current.segs[k]?.idx ?? 0) + 1
 
@@ -912,12 +934,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
             <label>
               Flow{' '}
               <select value={scope} onChange={(e) => setScope(e.target.value as 'end' | 'step')}>
-                <option value="end">to the end of the routine</option>
-                <option value="step">this step only, on repeat</option>
+                <option value="step">{mode === 'routine' ? 'just the first 8-count' : 'just this step'}</option>
+                <option value="end">{mode === 'routine' ? 'the whole routine' : 'from here to the end'}</option>
               </select>
             </label>
           </div>
-          <span className="notice">Dance straight through with the video. I only stop you when something is noticeably off, show you the fix, let you try it, then we go again from that 8-count and on past it.</span>
+          <span className="notice">{scope === 'step'
+            ? 'Dance this step with the video. I stop you only when something is noticeably off, show the fix, let you try it, then go again. One clean run with no stops passes the step.'
+            : 'One continuous run with the video. I stop you only when something is noticeably off, show the fix, then we go again from that 8-count and on past it.'}</span>
         </>
       )}
 
@@ -956,13 +980,19 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
 
       {phase === 'done' && summary && (
         <div className="feedback">
-          <p className="cue">{summary.pauses === 0 ? 'Flawless: straight through without a stop!' : `Made it to the end: ${summary.clean} clean 8-count${summary.clean === 1 ? '' : 's'}, ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}.`}</p>
+          <p className="cue">
+            {summary.passed ? `✓ Step passed at ${speed}×! The next step is unlocked.`
+              : scope === 'step' && summary.pauses > 0 ? `Made it through with ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}. One clean run without a stop passes the step.`
+                : scope === 'step' && summary.relaxed ? 'Clean run! On "way off" it doesn\'t count as a pass. Switch to "noticeably off" to pass the step.'
+                  : summary.pauses === 0 ? 'Flawless: straight through without a stop!' : `Made it to the end: ${summary.clean} clean 8-count${summary.clean === 1 ? '' : 's'}, ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}.`}
+          </p>
           {summary.trickiest !== null && <p className="notice">Trickiest: 8-count {summary.trickiest + 1}.</p>}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
             <button className="primary" onClick={() => begin()}>↻ Flow again</button>
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">🔊 Hear it again</button>}
-            <button onClick={onNextStep}>Next step →</button>
+            {mode === 'step' && <button className={summary.passed ? 'primary' : ''} onClick={onNextStep}>Next step →</button>}
+            <button onClick={() => { halt(); onExit() }}>Lesson tree</button>
           </div>
         </div>
       )}
