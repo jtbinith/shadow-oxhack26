@@ -87,11 +87,11 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
                 <span className={`badge ${r.status}`}>{r.status === 'ready' ? `${Math.round(r.tempo_bpm ?? 0)} BPM` : r.status}</span>
                 {r.status === 'ready' && (r.steps_total ?? 0) > 0 && (
                   <span className="routine-progress" title={`${r.steps_passed ?? 0} of ${r.steps_total} steps passed`}>
-                    <span className="bar"><span style={{ width: `${Math.round((100 * (r.steps_passed ?? 0)) / r.steps_total!)}%` }} /></span>
+                    <span className="pbar"><span style={{ width: `${Math.round((100 * (r.steps_passed ?? 0)) / r.steps_total!)}%` }} /></span>
                     <span className="notice">{r.steps_passed ?? 0}/{r.steps_total} steps</span>
                   </span>
                 )}
-                {r.status === 'processing' && <span className="routine-progress"><span className="bar busy"><span /></span><span className="notice">building</span></span>}
+                {r.status === 'processing' && <span className="routine-progress"><span className="pbar busy"><span /></span><span className="notice">building</span></span>}
               </button>
             </li>
           ))}

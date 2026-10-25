@@ -1065,7 +1065,7 @@ function RunProgress({ now, marks }: { now: () => number; marks: number[] }) {
     return () => cancelAnimationFrame(raf)
   }, [now])
   return (
-    <span className="bar run" aria-label="Progress through this run">
+    <span className="pbar run" aria-label="Progress through this run">
       <span ref={fill} />
       {marks.slice(1).map((m, i) => <i key={i} style={{ left: `${m * 100}%` }} />)}
     </span>

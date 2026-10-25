@@ -167,13 +167,13 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .heard { font-style: italic; }
 .link.back { display: inline-block; margin: 0 0 0.6rem; padding-left: 0; }
 /* Progress bars */
-.bar { position: relative; display: block; height: 6px; border-radius: 999px; background: #2a2438; overflow: hidden; }
-.bar > span { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--spot); border-radius: 999px; }
-.bar.busy > span { width: 30%; animation: busy 1.2s ease-in-out infinite; }
+.pbar { position: relative; display: block; height: 6px; border-radius: 999px; background: #2a2438; overflow: hidden; }
+.pbar > span { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--spot); border-radius: 999px; }
+.pbar.busy > span { width: 30%; animation: busy 1.2s ease-in-out infinite; }
 @keyframes busy { from { left: -30%; } to { left: 100%; } }
-.bar.run { margin: 0.4rem 0; height: 8px; }
-.bar.run > i { position: absolute; top: 0; bottom: 0; width: 2px; background: #0f0d15; }
+.pbar.run { margin: 0.4rem 0; height: 8px; }
+.pbar.run > i { position: absolute; top: 0; bottom: 0; width: 2px; background: #0f0d15; }
 .routine-progress { display: flex; align-items: center; gap: 0.5rem; flex-basis: 100%; }
-.routine-progress .bar { flex: 1; }
+.routine-progress .pbar { flex: 1; }
 .routines button { flex-wrap: wrap; }
 button.icon { display: inline-grid; place-items: center; padding: 0.45rem 0.6rem; line-height: 0; }
