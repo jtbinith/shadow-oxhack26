@@ -127,8 +127,8 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
       </section>
 
       {/* The phrases, each learnt on its own */}
-      <div className="section-head"><h3>Phrases</h3><MedalsInfo /></div>
-      <ol className="phrases" aria-label="Phrases">
+      <div className="section-head"><h3>{allFour ? "The 4-counts" : "The 8-counts"}</h3><MedalsInfo /></div>
+      <ol className="phrases" aria-label="The counts">
         {phrases.map(({ s, i }) => {
           const p = progress?.steps[i]
           const locked = progress ? !p?.unlocked : false // until progress loads, nothing looks locked

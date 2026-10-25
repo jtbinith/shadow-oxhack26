@@ -462,3 +462,9 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* Thumbnail placeholder while it loads */
 .block-thumb.loading { background: linear-gradient(90deg, #1f1f1f 0%, #3a3a3a 50%, #1f1f1f 100%); background-size: 200% 100%; animation: thumb-load 1.1s linear infinite; }
 @keyframes thumb-load { to { background-position: -200% 0; } }
+/* Locked steps are disabled buttons: keep them solid (no global disabled fade) */
+.cp button:disabled, .phrase button:disabled { opacity: 1; }
+/* The squares sit on top of the line */
+.cp::before { z-index: 0; }
+.cp button { z-index: 1; }
+.cp-node { position: relative; z-index: 1; }
