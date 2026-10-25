@@ -12,6 +12,8 @@ import { parseCommand, type Action } from '../coach/commands'
 import QuickLink from '../QuickLink'
 import Crow from '../brand/Crow'
 import Murder from '../brand/Murder'
+import MurderPerch from '../brand/MurderPerch'
+import { stepCrows, targetCrows } from '../coach/murder'
 import LoadingScreen from '../brand/LoadingScreen'
 import { styleCue, styleFor } from '../coach/styles'
 
@@ -75,11 +77,15 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const [held, setHeld] = useState(false)
   // The murder meter: crows gather as the dancing drifts towards the stop threshold.
   const [crows, setCrows] = useState(0)
-  const crowsRef = useRef(0)
-  const setCrowCount = (n: number) => {
-    if (n !== crowsRef.current) {
-      crowsRef.current = n
-      setCrows(n)
+  const crowsRef = useRef({ n: 0, at: 0 })
+  // One crow at a time towards what the pressure calls for.
+  const updateCrows = (pressure: number) => {
+    const c = crowsRef.current
+    const now = performance.now()
+    const next = stepCrows(c.n, targetCrows(pressure), now - c.at)
+    if (next !== c.n) {
+      crowsRef.current = { n: next, at: now }
+      setCrows(next)
     }
   }
   const [giveUp, setGiveUp] = useState(false)
@@ -297,7 +303,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     setPause(null)
     setHeld(false)
     setSummary(null)
-    crowsRef.current = 0
+    crowsRef.current = { n: 0, at: 0 }
     setCrows(0)
     const beat = ((all.counts[1] - all.counts[0]) || 0.5) / st.speed
     const countIn = () => {
@@ -535,8 +541,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const s = st.detector?.push(t, frame)
     if (s) st.lastErrs = s.errs
     // 0 crows while it's going well; one more for each step closer to a stop; 5 = a murder (stop).
-    const pressure = st.detector?.pressure(t) ?? 0
-    setCrowCount(pressure < 0.55 ? 0 : Math.min(4, 1 + Math.floor((pressure - 0.55) / 0.11)))
+    updateCrows(st.detector?.pressure(t) ?? 0)
     const m = st.detector?.check(t)
     if (m) stopFor(m)
   }, [finishSection, flowFrom, now, recordSeg, say, stopFor])
@@ -1075,18 +1080,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             </div>
           )}
         </aside>
+        <div className="stage-col">
+        <MurderPerch count={phase === 'flowing' ? crows : 0} murder={phase === 'paused' && !!pause?.m} />
         <div className="stage">
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
-          {(phase === 'flowing' || (phase === 'paused' && pause?.m)) && (
-            <div className={`murder-meter n${phase === 'paused' ? 5 : crows}`} aria-live="polite">
-              {Array.from({ length: phase === 'paused' ? 5 : crows }, (_, i) => (
-                <Crow key={i} pose={(['stand', 'peck', 'caw', 'hop', 'caw'] as const)[i]} size={58} flip={i % 2 === 1} className="perched" />
-              ))}
-              {phase === 'flowing' && crows >= 3 && <span className="murder-warn">{crows >= 4 ? 'Careful… nearly a murder' : 'The crows are gathering…'}</span>}
-            </div>
-          )}
           {caption && (phase === 'flowing' || phase === 'countin' || phase === 'watching') && (
             <div className="caption-overlay" aria-hidden="true">{caption.settled} <i>{caption.guess}</i></div>
           )}
@@ -1097,6 +1096,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
               <b>Count {calling.count}</b> {calling.name}
             </div>
           )}
+        </div>
         </div>
         <div className="refpanel">
           {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <LoadingScreen small label="Loading the video…" />}
