@@ -3,6 +3,7 @@ import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
 import { useAuth } from '@clerk/clerk-react'
 import { useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, boneMask, normaliseFrame, refFrame, scoreRep, type Drill, type Frame, type RefData, type RepScore, type UserSample } from '../coach/score'
+import { countInDelay, recordSnippet } from '../coach/micsync'
 import { styleCue, styleFor } from '../coach/styles'
 
 // The parts of the Web Speech API we use (not in TypeScript's DOM types everywhere).
@@ -372,23 +373,24 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     r.start()
   }
 
-  const start = useCallback(() => {
+  // lead: seconds until the count-in begins; music: the learner's song gives the beat, so no clicks.
+  const start = useCallback((lead = 0.3, music = false) => {
     const r = ref.current
     if (!r || !r.frames.length) return
     const ac = (audio.current ??= new AudioContext())
     const beat = (r.counts[1] - r.counts[0] || 0.5) / speed // real seconds per count
-    const t0 = ac.currentTime + 0.3
+    const t0 = ac.currentTime + lead
     // Count-in: "5, 6, 7, 8" on the beat, then the rep starts on "1".
     ;['5', '6', '7', '8'].forEach((n, k) => {
-      click(ac, t0 + k * beat, k === 0)
+      if (!music) click(ac, t0 + k * beat, k === 0)
       window.setTimeout(() => {
         setCountLabel(n)
         speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
-      }, (0.3 + k * beat) * 1000)
+      }, (lead + k * beat) * 1000)
     })
-    const repStartIn = 0.3 + 4 * beat
+    const repStartIn = lead + 4 * beat
     // Click track for the rep, accented on each "1".
-    r.counts.forEach((c, k) => click(ac, t0 + 4 * beat + c / speed, k % 8 === 0))
+    if (!music) r.counts.forEach((c, k) => click(ac, t0 + 4 * beat + c / speed, k % 8 === 0))
     samples.current = []
     setResult(null)
     setNext(null)
@@ -399,6 +401,44 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       setPhase('dancing')
     }, repStartIn * 1000)
   }, [speed, drill])
+
+  // Mic sync: listen to the learner's own copy of the song, find where it is, and start the
+  // count-in so "1" lands exactly when the song reaches this step (or a later repeat of it).
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const syncToMusic = async () => {
+    const r = ref.current
+    if (!r) return
+    setSyncMsg('Listening… play the song out loud')
+    try {
+      const { pcm, endedAt } = await recordSnippet(6)
+      setSyncMsg('Finding your place in the song…')
+      const res = await api<{ position: number | null; confidence: number }>(`/api/routines/${routine.id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: pcm.buffer as ArrayBuffer,
+      })
+      if (res.position === null || res.confidence < 0.3) {
+        setSyncMsg("Couldn't hear the song clearly. Turn it up, move closer, and try again.")
+        return
+      }
+      const songNow = res.position + (performance.now() - endedAt) / 1000
+      const first = step.eight_counts[0]
+      const starts = routine.eight_counts
+        .filter((e) => e.idx === first || (step.eight_counts.length === 1 && e.repeat_of === first))
+        .map((e) => e.start_s)
+      const beat = r.counts[1] - r.counts[0] || 0.5
+      const delay = countInDelay(songNow, starts, beat)
+      if (delay === null) {
+        setSyncMsg('This part of the song has passed. Restart the song and press Sync again.')
+        return
+      }
+      setSyncMsg(`Synced at ${songNow.toFixed(1)} s. Get ready, count-in in ${Math.round(delay)} s.`)
+      start(delay, true)
+      window.setTimeout(() => setSyncMsg(null), (delay + 4 * beat) * 1000)
+    } catch (e) {
+      setSyncMsg(e instanceof Error && e.name === 'NotAllowedError' ? 'Microphone blocked: allow it in the browser to sync.' : "Sync didn't work this time. Use Start instead.")
+    }
+  }
 
   const finish = useCallback(async (lost = false) => {
     const r = ref.current!
@@ -597,6 +637,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       </div>
 
       {phase === 'loading' && <p className="notice">Loading the routine…</p>}
+      {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
       {phase === 'ready' && step.eight_counts.length === 1 && (() => {
         const ms = routine.eight_counts.find((e) => e.idx === step.eight_counts[0])?.moves
         return ms?.length ? (
@@ -607,7 +648,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       })()}
       {phase === 'ready' && (
         <div className="controls">
-          <button className="primary" onClick={start}>Start ({speed}×)</button>
+          <button className="primary" onClick={() => start()}>Start ({speed}×)</button>
+          {routine.beat_source === 'music' && (
+            <button onClick={() => void syncToMusic()} disabled={speed !== 1 || drill === 'half' || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : drill === 'half' ? 'Not for the half drill' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
+              🎵 Sync to my music
+            </button>
+          )}
           <label>
             Speed{' '}
             <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>

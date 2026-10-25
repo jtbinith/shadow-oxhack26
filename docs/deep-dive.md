@@ -203,7 +203,8 @@ Schema: `backend/migrations/001_init.sql`.
 **ElevenLabs** voices (calm and hype), with every cue generated once and cached so it plays instantly; **Kokoro** (open source, runs on the server) as automatic fallback.
 
 ### P1 extras
-- **Mic sync:** you play your own copy of the song; the app listens and lines it up with the stored fingerprint to know where you are and how fast it's playing.
+- **Mic sync (built):** you play your own copy of the song; the app records 6 s through the mic, the server slides it along the stored fingerprint (12 chroma bins + onset strength, 10 per second; mean-centred chroma cosine 70% + onset correlation 30%) and returns where the song is. Confidence = how far the best match beats the next best one at least 1.5 s away. The count-in is then scheduled so count 1 lands on the step (or a later repeat). The snippet is never stored. Works at 1× only.
+- **Move naming (built):** rules over the normalised skeleton on each count: wrist vs shoulder height → arms up / out; stance width change vs leg length → step left / right / feet together; knee above hip line → knee up, with the foot high too → kick; both feet near the hips → drop; plus turns/hits/freezes from segmentation. Shown per count and as a live caller during the rep.
 - **AIST++ calibration:** the same choreography danced by different experts tells us what a "good" score looks like, so 80 means the same in every routine. A labelled move library names moves.
 
 ---

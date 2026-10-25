@@ -5,7 +5,7 @@ Hacking ends **Sun 12:00**. Repo: github.com/jtbinith/shadow-oxhack26 (private).
 ## How to run (local dev)
 - Backend: `backend/.venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 7860 --reload --reload-dir backend` (run from repo root so `.env` loads)
 - Frontend: `cd frontend && npm run dev -- --port 5173` → **http://127.0.0.1:5173** (proxies /api to 7860)
-- Tests: `cd frontend && npx vitest run` (39) · `backend/.venv/bin/python -m pytest -q backend/tests` (23, incl. Playwright browser tests). CI runs both on push.
+- Tests: `cd frontend && npx vitest run` (42) · `backend/.venv/bin/python -m pytest -q backend/tests` (34, incl. Playwright browser tests). CI runs both on push.
 - Docker build is broken on venue Wi-Fi (BuildKit DNS, issue #49); fix needs `/etc/docker/daemon.json` DNS (user runs with sudo). Docker container is stopped.
 - Loopback API testing: start a second uvicorn on 127.0.0.1:7869 with `AUTH_TEST_BYPASS=true`; test data under `user_id='test-user'` — delete afterwards.
 
@@ -20,16 +20,20 @@ Gemini (planning model `gemini-3.5-flash-lite`; 3.8-flash was ~55 s/call), Tiger
 - **Agents (Gemini tool loops)**: "Tell the coach" re-plan (get_progress / get_habits / get_lesson_plan / update_lesson_plan) and **Ask the coach** mid-practice (data prefetched, `suggest_drill` tool, ~5 s, spoken).
 - **Voice**: ElevenLabs via `/api/tts`, cached per line in Tiger Data, rationed; browser voice fallback; persona toggle.
 - **Progress page**: streak, XP, steps learnt, rep-by-rep bars, mastery/tiers/reviews, reps-to-learn, habits, "practise weakest step".
+- **Move naming** (`backend/app/pipeline/moves.py`): each count named from pose rules (arms up/out, step left/right, kick, knee up, drop, turn, hit/hold); 8-count summary in the tree, move strip + live caller in practice, fed to the planner. `backend/scripts/backfill_moves.py` names older routines.
+- **Mic sync** (`backend/app/pipeline/sync.py`, `POST /api/routines/{id}/sync`, `frontend/src/coach/micsync.ts`): learner plays their own copy of the song; 6 s mic snippet matched against the stored chroma+onset fingerprint (±0.1 s on tests, ~20 ms); count-in scheduled so count 1 lands on the step (or a later repeat). 1× only, no clicks while synced; snippet never stored.
+- **Spoken questions**: 🎤 on Ask the coach (browser speech recognition).
 - **Error clustering** (`backend/app/coach/clusters.py`): failing reps → k-means (k by silhouette) → labelled habits; drives drills, coach agents, progress, practice banner.
 - **Rationing**: daily caps (Gemini 300, TTS 20k chars, uploads 40) in `usage` table.
 - **AIST++ calibration study**: ran; expert vs wrong-choreo overlap ~29% → placeholders kept (`docs/aist-calibration.md`).
 
 ## Not built / honest gaps ❌
-- **Move clustering / naming**: not built. (Error clustering ✅ now built — see above.)
-- Mic sync to the user's own song (P1), spoken questions (STT), group mode, true 3D mesh ghost, sections, HF deploy.
+- Move names are rules, not a trained classifier; noisy on fast or side-on footage.
+- Mic sync not yet tried with a real speaker + laptop mic (only synthetic tests).
+- Group mode, true 3D mesh ghost, sections, HF deploy.
 - No trained correction model (no open dance-correction dataset available tonight; Ego-Exo4D needs ~2-day licence).
 
 ## Next (suggested order)
 1. User runs the full flow with a real clip **with music** → fix what breaks.
 3. UI polish. 4. Reference clips (follow `docs/datasets.yaml` own_data_spec), slides, rehearsal, backup video, Devpost.
-5. HF deploy if time (needs HF token). 6. Mic sync (riskiest).
+5. Try mic sync with the real song on a speaker. 6. HF deploy if time (needs HF token).

@@ -14,6 +14,14 @@ const LETTER_WIDTH = 150;
 const WALKER_WIDTH = 162;
 const WALKER_HEIGHT = 299;
 
+const walkerBox = (x: number, y: number): React.CSSProperties => ({
+  position: 'absolute',
+  left: x - WALKER_WIDTH / 2,
+  top: y - WALKER_HEIGHT / 2,
+  width: WALKER_WIDTH,
+  height: WALKER_HEIGHT,
+});
+
 export const ShadowReveal: React.FC = () => {
   const frame = useCurrentFrame();
   const { width, height, durationInFrames } = useVideoConfig();
@@ -22,14 +30,14 @@ export const ShadowReveal: React.FC = () => {
   const centerX = width / 2;
   const centerY = height / 2;
 
-  // Distance of each walker's centre from the screen centre. They start back to back
-  // and walk at a constant pace (easing would make the feet look like they slide).
+  // Distance of each walker's centre from the screen centre. They start stacked on top of
+  // each other so they read as a single figure, then walk at a constant pace (easing would make the feet look like they slide).
   const sweepStart = 30;
   const sweepEnd = durationInFrames - 30;
   const walkerOffset = interpolate(
     frame,
     [sweepStart, sweepEnd],
-    [WALKER_WIDTH / 2, width / 2 + WALKER_WIDTH / 2],
+    [0, width / 2 + WALKER_WIDTH / 2],
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
@@ -77,15 +85,33 @@ export const ShadowReveal: React.FC = () => {
         );
       })}
 
+      {/* Black covers hide the letters under each walker */}
       {[-1, 1].map((direction) => (
         <div
-          key={direction}
+          key={`cover${direction}`}
           style={{
-            position: 'absolute',
-            left: centerX + direction * walkerOffset - WALKER_WIDTH / 2,
-            top: centerY - WALKER_HEIGHT / 2,
-            width: WALKER_WIDTH,
-            height: WALKER_HEIGHT,
+            ...walkerBox(centerX + direction * walkerOffset, centerY),
+            backgroundColor: '#000',
+          }}
+        />
+      ))}
+
+      {/* Figures are drawn above both covers and blended with "lighten", so where the
+          two overlap they merge instead of one black box cutting into the other */}
+      {[-1, 1].map((direction) => (
+        <div
+          key={`walker${direction}`}
+          style={{
+            ...walkerBox(centerX + direction * walkerOffset, centerY),
+            mixBlendMode: 'lighten',
+            // Mirrored copies can't line up, so only one is visible while they are stacked;
+            // the other emerges from behind it as they part
+            opacity:
+              direction === 1
+                ? 1
+                : interpolate(walkerOffset, [0, WALKER_WIDTH * 0.4], [0, 1], {
+                    extrapolateRight: 'clamp',
+                  }),
             // The source faces right; mirror it so each walker faces the centre as it moves out
             transform: `scaleX(${-direction})`,
           }}

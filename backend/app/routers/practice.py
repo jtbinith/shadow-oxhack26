@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
@@ -8,6 +8,7 @@ from .. import db
 from ..auth import User
 from ..coach import clusters as habits_mod
 from ..coach import engine
+from ..pipeline import sync as mic_sync
 
 router = APIRouter(prefix="/api/routines/{routine_id}", tags=["practice"])
 
@@ -201,3 +202,24 @@ def ask_coach(routine_id: str, body: AskIn, user_id: str = User) -> dict:
             "answer": "I couldn't reach my notes just now — but from your last rep, focus on the cue I gave you and try it slower.",
             "drill": {"drill": "full", "speed": 0.5, "reason": "Slower rep while the coach reconnects"},
         }
+
+
+MAX_SNIPPET_S = 10
+
+
+@router.post("/sync")
+async def sync_to_music(routine_id: str, request: Request, user_id: str = User) -> dict:
+    """Mic sync. Body: raw 16-bit mono PCM at 22050 Hz, a few seconds of the learner's own copy of the
+    song. Returns where in the song the snippet ended. The audio is matched in memory, never stored."""
+    body = await request.body()
+    if len(body) > MAX_SNIPPET_S * mic_sync.SR * 2 or len(body) < mic_sync.SR:  # 0.5 s .. 10 s
+        raise HTTPException(413, f"Send 1-{MAX_SNIPPET_S} seconds of audio")
+    with _pool().connection() as c:
+        _owned(c, routine_id, user_id)
+        row = c.execute("SELECT fingerprint FROM routines WHERE id = %s", (routine_id,)).fetchone()
+    if not row or row[0] is None:
+        raise HTTPException(409, "This routine was uploaded without music, so there's nothing to sync to")
+    import numpy as np
+
+    pcm = np.frombuffer(body[: len(body) // 2 * 2], dtype="<i2").astype(np.float32) / 32768
+    return mic_sync.locate(bytes(row[0]), pcm)
