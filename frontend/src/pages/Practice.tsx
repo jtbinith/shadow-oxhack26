@@ -1090,10 +1090,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             </section>
           ) : null}
           <div className="controls">
-            <button className="primary" onClick={() => begin()}>Start flowing ({speed}×)</button>
-            <button onClick={watch}>Watch it first</button>
+            <button className="go" onClick={() => begin()}>Start flowing ({speed}×)</button>
+            <button className="go" onClick={watch}>Watch it first</button>
             {routine.beat_source === 'music' && (
-              <button onClick={() => void syncToMusic()} disabled={speed !== 1 || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
+              <button className="go" onClick={() => void syncToMusic()} disabled={speed !== 1 || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
                 Sync to my music
               </button>
             )}
@@ -1131,8 +1131,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             <QuickLink back onClick={() => { halt(); setPhase('paused') }}>Back to the fix</QuickLink>
           )}
           {phase === 'watching' && S.current.demoBack !== 'paused' && <QuickLink back onClick={stop}>Back</QuickLink>}
-          {phase === 'flowing' && <button className="icon" onClick={() => stopFor(null, 'manual')} title="Pause" aria-label="Pause"><PauseIcon /></button>}
-          {phase !== 'watching' && <button className="icon" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>}
+          {phase === 'flowing' && <button className="icon halt" onClick={() => stopFor(null, 'manual')} title="Pause" aria-label="Pause"><PauseIcon /></button>}
+          {phase !== 'watching' && <button className="icon halt" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>}
         </div>
       )}
 
@@ -1152,12 +1152,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           )}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
-            <button className="primary" onClick={redo}>Go again from count 1</button>
+            <button className="go" onClick={redo}>Go again from count 1</button>
             {pause.how && <button onClick={fixIt}>How do I fix it?</button>}
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
-            <button onClick={() => demo(pause.seg, pause.count)}>Show me slowly</button>
+            <button className="go" onClick={() => demo(pause.seg, pause.count)}>Show me slowly</button>
             <QuickLink onClick={skipAhead}>Skip ahead</QuickLink>
-            <button className="icon" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>
+            <button className="icon halt" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>
           </div>
         </div>
       )}
@@ -1173,7 +1173,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           {summary.trickiest !== null && <p className="notice">Trickiest: {phraseName(routine, summary.trickiest)}.</p>}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
-            <button className="primary" onClick={() => begin()}>Flow again</button>
+            <button className="go" onClick={() => begin()}>Flow again</button>
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
             {mode === 'step' && <QuickLink className={summary.passed ? 'primary' : ''} onClick={onNextStep}>Next step</QuickLink>}
             <button onClick={() => { halt(); onExit() }}>Lesson tree</button>

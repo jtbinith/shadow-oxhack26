@@ -278,3 +278,15 @@ button.primary:hover:not(:disabled), .card button.primary:hover:not(:disabled), 
 button.link:hover { text-decoration-thickness: 3px; }
 .drop:hover { background: var(--chrome); }
 button:focus-visible, .quicklink:focus-visible { outline: 3px solid #4da3ff; outline-offset: 2px; }
+
+/* Colour roles: green = start/play, red = stop/pause, blue = call to action */
+:root { --go: #1f9d55; --go-dark: #157a40; --halt: #d64545; --halt-dark: #a82f2f; --cta: #2b6cff; --cta-dark: #1a4fd1; }
+button.go, .controls button.go { background: var(--go); color: #fff; }
+button.go:hover:not(:disabled), .controls button.go:hover:not(:disabled) { background: var(--go-dark); color: #fff; }
+button.halt, .controls button.halt { background: var(--halt); color: #fff; }
+button.halt:hover:not(:disabled), .controls button.halt:hover:not(:disabled) { background: var(--halt-dark); color: #fff; }
+button.primary, .card button.primary, .mistake button.primary, .feedback button.primary, .askpanel button.primary,
+.tree-head button.primary, .quicklink.primary, .hero button { background: var(--cta); color: #fff; }
+button.primary:hover:not(:disabled), .card button.primary:hover:not(:disabled), .mistake button.primary:hover:not(:disabled),
+.feedback button.primary:hover:not(:disabled), .askpanel button.primary:hover:not(:disabled), .tree-head button.primary:hover:not(:disabled),
+.quicklink.primary:hover, .hero button:hover { background: var(--cta-dark); color: #fff; }
