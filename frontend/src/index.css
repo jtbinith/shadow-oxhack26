@@ -27,14 +27,15 @@ a { color: inherit; }
 /* Top bar */
 main > header {
   display: flex; justify-content: space-between; align-items: center;
-  background: var(--chrome); border-bottom: var(--line); padding: 0.35rem 1.5rem; box-sizing: border-box;
+  background: var(--chrome); border-bottom: var(--line); padding: 0.9rem 2rem; min-height: 4.5rem; box-sizing: border-box;
   width: 100vw; margin: 0 0 1.4rem calc(50% - 50vw);
 }
-.logo { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-family: 'Yikes', 'Baloo 2', system-ui; font-weight: 400; font-size: 1.7rem; letter-spacing: 0.02em; margin: 0; }
+.logo { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-family: 'Yikes', 'Baloo 2', system-ui; font-weight: 400; font-size: 3rem; line-height: 1; letter-spacing: 0.02em; gap: 0.8rem; margin: 0; }
 .logo::before {
-  content: ''; width: 26px; height: 26px; border: var(--line); border-radius: 6px; background: var(--paper);
+  content: ''; width: 44px; height: 44px; border: 3px solid var(--ink); border-radius: 9px; background: var(--paper); flex-shrink: 0;
   background-image: radial-gradient(circle at 50% 42%, var(--ink) 4px, transparent 4.5px), linear-gradient(var(--ink), var(--ink));
-  background-size: 100% 100%, 12px 2px; background-position: center, center 70%; background-repeat: no-repeat;
+  background-image: radial-gradient(circle at 50% 40%, var(--ink) 7px, transparent 7.5px), linear-gradient(var(--ink), var(--ink));
+  background-size: 100% 100%, 20px 3px; background-position: center, center 72%; background-repeat: no-repeat;
 }
 header { display: flex; justify-content: space-between; align-items: center; }
 
