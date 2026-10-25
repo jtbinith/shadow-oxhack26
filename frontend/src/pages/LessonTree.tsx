@@ -39,7 +39,7 @@ function useThumb(routineId: string, idx: number) {
 
 function Thumb({ routineId, idx }: { routineId: string; idx: number }) {
   const url = useThumb(routineId, idx)
-  return url ? <img className="block-thumb" src={url} alt="" /> : <span className="block-thumb empty" />
+  return url ? <img className="block-thumb" src={url} alt="" /> : <span className="block-thumb loading" />
 }
 
 function Medals({ best }: { best: number }) {
@@ -131,18 +131,18 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
       <ol className="phrases" aria-label="Phrases">
         {phrases.map(({ s, i }) => {
           const p = progress?.steps[i]
-          const locked = p ? !p.unlocked : i > 0
+          const locked = progress ? !p?.unlocked : false // until progress loads, nothing looks locked
           const best = p?.best_speed ?? 0
           const ec = routine.eight_counts.find((e) => e.idx === s.eight_counts[0])
           return (
-            <li key={i} className={`phrase ${locked ? 'locked' : ''} ${best > 0 ? 'done' : ''}`}>
+            <li key={i} className={`phrase ${locked ? 'locked' : ''} ${best > 0 ? 'done' : ''} ${progress ? '' : 'pending'}`}>
               <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Pass the step before to unlock' : `Practise ${phraseName(routine, s.eight_counts[0])}`}>
                 <Thumb routineId={routine.id} idx={s.eight_counts[0]} />
                 <span className="phrase-label">{phraseName(routine, s.eight_counts[0])}</span>
                 {ec?.name && <span className="phrase-moves">{ec.name}</span>}
                 <span className="phrase-foot">
                   <Medals best={best} />
-                  <span className="notice">{locked ? 'locked' : `${s.start_speed}×`}</span>
+                  <span className="notice">{!progress ? '' : locked ? 'locked' : `${s.start_speed}×`}</span>
                 </span>
               </button>
             </li>
@@ -164,13 +164,13 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
           <ol className="checkpoint-bar">
             {checkpoints.map(({ s, i }, k) => {
               const p = progress?.steps[i]
-              const locked = p ? !p.unlocked : true
+              const locked = progress ? !p?.unlocked : false
               const best = p?.best_speed ?? 0
               const last = s.eight_counts
               const whole = k === checkpoints.length - 1 && last.length === columns.length
               const name = whole ? 'Whole routine' : `${last[0] + 1}–${last[last.length - 1] + 1}`
               return (
-                <li key={i} className={`cp ${locked ? 'locked' : best > 0 ? 'done' : 'open'} ${whole ? 'whole' : ''}`}>
+                <li key={i} className={`cp ${!progress ? 'pending' : locked ? 'locked' : best > 0 ? 'done' : 'open'} ${whole ? 'whole' : ''}`}>
                   <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Unlocks as you pass the phrases before it' : `Practise checkpoint ${name}`}>
                     <span className="cp-node">{whole ? '★' : ''}</span>
                     <span className="cp-label">{name}</span>
