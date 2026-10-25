@@ -293,8 +293,8 @@ button.primary:hover:not(:disabled), .card button.primary:hover:not(:disabled), 
 
 /* Top bar navigation */
 .topnav { display: flex; align-items: center; gap: 0.6rem; }
-.topnav button { font: 700 1.05rem 'Baloo 2', system-ui; background: transparent; border: var(--line); padding: 0.35rem 0.9rem; cursor: pointer; color: var(--ink); }
-.topnav button:hover, .topnav button.on { background: var(--ink); color: var(--paper); }
+.topnav .navlink { font: 700 1.05rem 'Baloo 2', system-ui; background: transparent; border: var(--line); padding: 0.35rem 0.9rem; cursor: pointer; color: var(--ink); }
+.topnav .navlink:hover, .topnav .navlink.on { background: var(--ink); color: var(--paper); }
 .page-title { font-size: 2.6rem; margin: 0 0 1rem; }
 
 /* Lesson plan header */

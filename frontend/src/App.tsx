@@ -50,8 +50,8 @@ export default function App() {
         </h1>
         <SignedIn>
           <nav className="topnav">
-            <button className={view.name === 'home' ? 'on' : ''} onClick={() => go(home)}>My routines</button>
-            <button className={view.name === 'me' ? 'on' : ''} onClick={() => go({ name: 'me' })}>My progress</button>
+            <button className={`navlink ${view.name === 'home' ? 'on' : ''}`} onClick={() => go(home)}>My routines</button>
+            <button className={`navlink ${view.name === 'me' ? 'on' : ''}`} onClick={() => go({ name: 'me' })}>My progress</button>
             <UserButton />
           </nav>
         </SignedIn>
