@@ -5,7 +5,7 @@ import { useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, normaliseFrame, refFrame, scoreRep, type Frame, type RefData, type UserSample } from '../coach/score'
 import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
-import { MistakeDetector, THRESHOLDS, describe, holding, type Mistake, type Sensitivity } from '../coach/live'
+import { MistakeDetector, THRESHOLDS, describe, holding, howTo, type Mistake, type Sensitivity } from '../coach/live'
 import { anchor, drawArrow, drawBodyGhost, drawPose } from '../coach/draw'
 import { click, makeSpeak, speakFallback } from '../coach/voice'
 import { styleCue, styleFor } from '../coach/styles'
@@ -30,7 +30,8 @@ type Phase = 'loading' | 'ready' | 'watching' | 'countin' | 'flowing' | 'paused'
 type Reference = { fps: number; start: number; end: number; counts: number[]; points: number[][][]; world?: number[][][] }
 // One 8-count inside the flowing section.
 type Seg = { idx: number; off: number; dur: number; ref: RefData; names: string[] }
-type Pause = { m: Mistake | null; seg: number; count: number; headline: string; fixes: string[]; lost?: boolean }
+type Pause = { m: Mistake | null; seg: number; count: number; headline: string; fixes: string[]; lost?: boolean; how?: { steps: string[]; spoken: string } }
+type Answer = { answer: string; drill: { drill: string; speed: number; reason: string } | null }
 
 const SPEEDS = [0.25, 0.5, 0.75, 1]
 const LOST_AFTER_S = 2.5
@@ -70,6 +71,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const ghostModeRef = useRef(ghostMode)
   ghostModeRef.current = ghostMode
   const speak = useRef(makeSpeak(getToken, () => personaRef.current)).current
+  // The last thing the coach said, so the learner can hear it again.
+  const [lastSaid, setLastSaid] = useState<string | null>(null)
+  const say = useCallback((text: string) => {
+    setLastSaid(text)
+    void speak(text)
+  }, [speak])
 
   // Everything the per-frame callbacks need, kept in one mutable place.
   const S = useRef({
@@ -305,7 +312,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     if (why === 'lost') {
       st.target = null
       setPause({ m: null, seg: k, count, headline: 'I lost you', fixes: ["Step back so your whole body is in the frame, then we'll go again."], lost: true })
-      void speak("I lost you. Step back into the frame and we'll go again.")
+      say("I lost you. Step back into the frame and we'll go again.")
     } else if (why === 'manual' || !m) {
       st.target = null
       setPause({ m: null, seg: k, count, headline: 'Paused', fixes: ['Take a breath. Redo this 8-count or skip ahead when you are ready.'] })
@@ -314,12 +321,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       st.pausesAt.set(k, (st.pausesAt.get(k) ?? 0) + 1)
       if (st.all) st.target = { frame: st.all.frames[m.j], j: m.j, bone: m.bone }
       const d = describe(m, count)
-      setPause({ m, seg: k, count, headline: d.headline, fixes: d.fixes })
-      void speak(d.spoken)
+      const how = howTo(m, count)
+      speak.prefetch(how.spoken) // so "How do I fix it?" answers instantly
+      setPause({ m, seg: k, count, headline: d.headline, fixes: d.fixes, how })
+      say(d.spoken)
       void recordSeg(k, m, count)
     }
     setPhase('paused')
-  }, [halt, now, recordSeg, speak])
+  }, [halt, now, recordSeg, say, speak])
 
   // ---- redo the 8-count where the mistake was, then carry on past it ----
   const redo = useCallback(() => {
@@ -334,16 +343,17 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
       setNote(`Second stop here, so this 8-count goes at ${slower}×. Back up to speed after it.`)
     }
     setCoachAnswer(null)
+    setMore(null)
     flowFrom(st.segs[k]?.off ?? 0)
   }, [flowFrom, pause])
 
   // Once the learner matches the target pose: say so and go again automatically.
   useEffect(() => {
     if (!held || phase !== 'paused') return
-    void speak("That's it! Again from the top of this 8-count.")
+    say("That's it! Again from the top of this 8-count.")
     const id = window.setTimeout(redo, 1800)
     return () => window.clearTimeout(id)
-  }, [held, phase, redo, speak])
+  }, [held, phase, redo, say])
 
   const finishSection = useCallback(() => {
     const st = S.current
@@ -351,8 +361,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     const tricky = [...st.pausesAt.entries()].sort((a, b) => b[1] - a[1])[0]
     setSummary({ clean: st.stats.clean, pauses: st.stats.pauses, trickiest: tricky ? st.segs[tricky[0]]?.idx ?? null : null })
     setPhase('done')
-    void speak(st.stats.pauses === 0 ? 'Flawless. You flowed straight through!' : 'Nice work. You made it to the end.')
-  }, [halt, speak])
+    say(st.stats.pauses === 0 ? 'Flawless. You flowed straight through!' : 'Nice work. You made it to the end.')
+  }, [halt, say])
 
   // ---- every camera frame ----
   const onFrame = useCallback((f: CamFrame) => {
@@ -390,7 +400,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         setSpeed(st.baseSpeed)
         if (video.current) video.current.playbackRate = st.baseSpeed
         setNote('Nailed it. Back up to speed.')
-        void speak('Nailed it. Back up to speed.')
+        say('Nailed it. Back up to speed.')
       }
       st.seg = k
       st.samples = []
@@ -415,7 +425,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     if (s) st.lastErrs = s.errs
     const m = st.detector?.check(t)
     if (m) stopFor(m)
-  }, [finishSection, flowFrom, now, recordSeg, speak, stopFor])
+  }, [finishSection, flowFrom, now, recordSeg, say, stopFor])
 
   // ---- the ghost: the routine's pose for "now" (the frozen target while paused) ----
   const overlay = useCallback((ctx: CanvasRenderingContext2D, people: Person[], dancerId: number | null) => {
@@ -560,12 +570,23 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   const [asking, setAsking] = useState(false)
   const [listening, setListening] = useState(false)
   const recogniser = useRef<SpeechRecognitionLike | null>(null)
-  const [coachAnswer, setCoachAnswer] = useState<{ answer: string; drill: { drill: string; speed: number; reason: string } | null } | null>(null)
-  const askCoach = async (q: string) => {
+  const [coachAnswer, setCoachAnswer] = useState<(Answer & { instant?: boolean }) | null>(null)
+  const [more, setMore] = useState<Answer | null>(null) // the coach agent's extra tips after an instant answer
+  // "How do I fix it?": the instant steps straight away (audio already fetched), and the coach
+  // agent's tips underneath when they arrive, without talking over the first answer.
+  const fixIt = () => {
+    if (!pause?.how) return
+    setCoachAnswer({ answer: pause.how.steps.join(' '), drill: null, instant: true })
+    say(pause.how.spoken)
+    void askCoach(`How do I fix this? ${pause.headline}. ${pause.fixes.join(' ')}`, true)
+  }
+
+  const askCoach = async (q: string, extra = false) => {
     q = q.trim()
     if (q.length < 2) return
     setAsking(true)
-    setCoachAnswer(null)
+    setMore(null)
+    if (!extra) setCoachAnswer(null)
     try {
       const m = pause?.m
       const ctx = pause
@@ -587,11 +608,16 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q, step_index: stepIndex, rep_context: ctx }),
       })
-      setCoachAnswer(r)
-      setQuestion('')
-      void speak(r.answer)
+      if (extra) {
+        setMore(r)
+        speak.prefetch(r.answer) // ready for 🔊
+      } else {
+        setCoachAnswer(r)
+        setQuestion('')
+        say(r.answer)
+      }
     } catch {
-      setCoachAnswer({ answer: "I didn't catch that. Try again in a moment.", drill: null })
+      if (!extra) setCoachAnswer({ answer: "I didn't catch that. Try again in a moment.", drill: null })
     } finally {
       setAsking(false)
     }
@@ -732,7 +758,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
             <button className="primary" onClick={redo}>↻ Redo this 8-count</button>
-            {pause.m && <button onClick={() => void askCoach(`How do I fix this? ${pause.headline}. ${pause.fixes.join(' ')}`)} disabled={asking}>❓ How do I fix it?</button>}
+            {pause.how && <button onClick={fixIt}>❓ How do I fix it?</button>}
+            {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">🔊 Hear it again</button>}
             <button onClick={() => {
               const st = S.current
               const seg = st.segs[pause.seg]
@@ -751,6 +778,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
             <button className="primary" onClick={() => begin()}>↻ Flow again</button>
+            {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">🔊 Hear it again</button>}
             <button onClick={onNextStep}>Next step →</button>
           </div>
         </div>
@@ -769,18 +797,30 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           </form>
           {coachAnswer && (
             <div className="coach-says">
-              <p>🗣️ {coachAnswer.answer}</p>
-              {coachAnswer.drill && phase === 'paused' && (
-                <button className="primary" onClick={() => {
-                  const s = coachAnswer.drill!.speed
-                  S.current.speed = s
-                  S.current.slowed = s !== S.current.baseSpeed
-                  setSpeed(s)
-                  redo()
-                }}>
-                  Try it at {coachAnswer.drill.speed}×: {coachAnswer.drill.reason}
-                </button>
+              <p>
+                🗣️ {coachAnswer.answer}{' '}
+                <button className="link" onClick={() => void speak(coachAnswer.instant && pause?.how ? pause.how.spoken : coachAnswer.answer)} title="Hear it again">🔊</button>
+              </p>
+              {coachAnswer.instant && asking && <span className="notice">The coach is adding tips for you…</span>}
+              {more && (
+                <p className="more">
+                  <b>More from the coach:</b> {more.answer}{' '}
+                  <button className="link" onClick={() => say(more.answer)} title="Hear it">🔊</button>
+                </p>
               )}
+              {(() => {
+                const drill = more?.drill ?? coachAnswer.drill
+                return drill && phase === 'paused' ? (
+                  <button className="primary" onClick={() => {
+                    S.current.speed = drill.speed
+                    S.current.slowed = drill.speed !== S.current.baseSpeed
+                    setSpeed(drill.speed)
+                    redo()
+                  }}>
+                    Try it at {drill.speed}×: {drill.reason}
+                  </button>
+                ) : null
+              })()}
             </div>
           )}
         </div>

@@ -64,3 +64,14 @@ group('describe and holding', () => {
     expect(holding(pose(2, -1.4), target, 2, mask, THRESHOLDS.normal)).toBe(false)
   })
 })
+
+group('howTo', () => {
+  it('gives instant, concrete steps for the body part and direction', async () => {
+    const { howTo } = await import('../live')
+    const m = run((t) => (t > 2 ? pose(t, -1.2) : pose(t)), 3.5)!
+    const h = howTo(m, 3)
+    expect(h.steps[0]).toMatch(/Freeze/)
+    expect(h.steps.join(' ')).toMatch(/right (fore)?arm/)
+    expect(h.spoken).not.toMatch(/\d+ ?(°|ms|degrees)/)
+  })
+})

@@ -241,3 +241,35 @@ export function holding(frame: Frame | null, target: Frame, bone: number, mask: 
   if (n < 3) return false
   return (bone < 0 || (boneErr !== null && boneErr < 0.45 * th.bone)) && sum / n < 0.7 * th.mean
 }
+
+/** "How do I fix it?" answered instantly from the detected mistake: concrete technique steps
+ * for that body part and direction, timing and speed — no network needed. */
+export function howTo(m: Mistake, count: number): { steps: string[]; spoken: string } {
+  const steps: string[] = []
+  const d = m.direction
+  const arm = /arm/.test(m.part)
+  const fore = /forearm|shin/.test(m.part)
+  const side = m.part.split(' ')[0]
+  if (m.kind === 'shape') {
+    steps.push(`Freeze in the ghost's pose first: look at where its ${m.part} is and copy just that.`)
+    const tech: string[] = []
+    if (arm) {
+      if (/higher/.test(d)) tech.push(fore ? 'Bend less at the elbow and reach the hand up' : 'Lead with the elbow, then reach up through your fingertips. Keep the shoulder down so the arm lifts, not the shoulder')
+      if (/lower/.test(d)) tech.push(fore ? 'Let the hand drop from the elbow' : 'Press the arm down from the shoulder, elbow soft')
+      if (/wider/.test(d)) tech.push('Open from the shoulder blade and send the hand away from your body on a long line')
+      if (/closer/.test(d)) tech.push('Draw the arm in towards your centre, close to the body')
+    } else {
+      if (/higher/.test(d)) tech.push(fore ? 'Kick out from the knee and point the foot' : 'Lift from the hip with your core tight; the standing leg stays strong')
+      if (/lower/.test(d)) tech.push('Bring the leg down and keep the standing knee soft')
+      if (/wider/.test(d)) tech.push(`Take a bigger step out to the ${side}, with your weight over both feet`)
+      if (/closer/.test(d)) tech.push('Bring the foot back in under your hip')
+    }
+    if (!tech.length) tech.push(`Make the ${m.part} sharper and clearer in the shape`)
+    steps.push(tech.join('. ') + '.')
+  }
+  if (m.lag < -0.28 || m.kind === 'late') steps.push(`Count out loud and arrive in the shape ON "${count}", not after it. Start moving on the count before.`)
+  else if (m.lag > 0.12 || m.kind === 'early') steps.push(`Hold the shape before a touch longer, then move as "${count}" lands.`)
+  if (m.kind === 'small' || (m.speedRatio !== null && m.speedRatio < 0.6)) steps.push('Go to full stretch on every move and snap into each shape. Bigger than feels natural.')
+  steps.push(`Then we redo this 8-count from count 1. Think "${m.kind === 'shape' ? `${m.part} ${d.replace(/^(much|a touch) /, '')}` : m.kind === 'late' ? 'early' : m.kind === 'early' ? 'wait' : 'bigger'}" on ${count}.`)
+  return { steps, spoken: steps.slice(0, 3).join(' ') }
+}
