@@ -2,6 +2,8 @@
 
 **Learn any dance from any video, with a coach that adapts to every rep.**
 
+**Demo video:** [shadow-demo.zip](https://github.com/jtbinith/shadow-oxhack26/releases/download/demo-video/shadow-demo.zip) (2 minutes; unzip and play `shadow-demo.mp4`)
+
 Upload a dance video and Shadow turns it into a step-by-step course. You practise in front of your webcam with a ghost dancer to follow, and after every 8-count you get a score, a replay of your weakest moment and one spoken correction. Shadow then picks your next drill based on exactly what you got wrong, and tracks your progress move by move until you've learned the whole routine.
 
 *Just Dance × Duolingo, for the choreography you actually want to learn.*

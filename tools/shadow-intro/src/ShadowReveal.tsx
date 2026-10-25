@@ -1,18 +1,19 @@
 import React from 'react';
 import {
   AbsoluteFill,
+  Img,
   interpolate,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
-import { Gif } from '@remotion/gif';
 
 const WORD = 'SHADOW';
-// walk.gif = solid silhouette, walk-outline.gif = white line art from the video clip
-const WALKER_GIF = 'walk-outline.gif';
+// Cut-out line-art walk cycle (transparent outside the figure); see scripts/cutout.py
+const WALK_FRAMES = 6;
+const WALK_FRAME_SECONDS = 0.2;
 const LETTER_WIDTH = 150;
-// Matches the walker GIFs in public/; wider than a letter so a walker hides the letter it is crossing
+// Matches the frames in public/walk-cutout/; wider than a letter so a walker hides the letter it is crossing
 const WALKER_WIDTH = 162;
 const WALKER_HEIGHT = 299;
 
@@ -26,7 +27,8 @@ const walkerBox = (x: number, y: number): React.CSSProperties => ({
 
 export const ShadowReveal: React.FC = () => {
   const frame = useCurrentFrame();
-  const { width, height, durationInFrames } = useVideoConfig();
+  const { width, height, fps, durationInFrames } = useVideoConfig();
+  const walkFrame = (Math.floor(frame / (fps * WALK_FRAME_SECONDS)) % WALK_FRAMES) + 1;
 
   const wordLeft = (width - WORD.length * LETTER_WIDTH) / 2;
   const centerX = width / 2;
@@ -48,12 +50,13 @@ export const ShadowReveal: React.FC = () => {
       {WORD.split('').map((letter, i) => {
         const letterLeft = wordLeft + i * LETTER_WIDTH;
         const letterRight = letterLeft + LETTER_WIDTH;
-        // Each letter fades in as the walker heading its way crosses it
+        // Each letter fades in behind the walker heading its way, as his back edge crosses it
         const [near, far] =
           letterLeft >= centerX
             ? [letterLeft - centerX, letterRight - centerX]
             : [centerX - letterRight, centerX - letterLeft];
-        const opacity = interpolate(walkerOffset, [near, far], [0, 1], {
+        const trail = WALKER_WIDTH / 2;
+        const opacity = interpolate(walkerOffset, [near + trail, far + trail], [0, 1], {
           extrapolateLeft: 'clamp',
           extrapolateRight: 'clamp',
         });
@@ -87,45 +90,24 @@ export const ShadowReveal: React.FC = () => {
         );
       })}
 
-      {/* Black covers hide the letters under each walker */}
       {[-1, 1].map((direction) => (
-        <div
-          key={`cover${direction}`}
+        <Img
+          key={direction}
+          src={staticFile(`walk-cutout/${walkFrame}.png`)}
           style={{
             ...walkerBox(centerX + direction * walkerOffset, centerY),
-            backgroundColor: '#000',
-          }}
-        />
-      ))}
-
-      {/* Figures are drawn above both covers and blended with "lighten", so where the
-          two overlap they merge instead of one black box cutting into the other */}
-      {[-1, 1].map((direction) => (
-        <div
-          key={`walker${direction}`}
-          style={{
-            ...walkerBox(centerX + direction * walkerOffset, centerY),
-            mixBlendMode: 'lighten',
-            // Mirrored copies can't line up, so only one is visible while they are stacked;
-            // the other emerges from behind it as they part
+            // Mirrored copies can't line up, so only the right-moving one (drawn on top) is
+            // visible while they are stacked; the other emerges from behind it as they part
             opacity:
               direction === 1
                 ? 1
-                : interpolate(walkerOffset, [0, WALKER_WIDTH * 0.4], [0, 1], {
+                : interpolate(walkerOffset, [0, WALKER_WIDTH * 0.6], [0, 1], {
                     extrapolateRight: 'clamp',
                   }),
             // The source faces right; mirror it so each walker faces the centre as it moves out
             transform: `scaleX(${-direction})`,
           }}
-        >
-          <Gif
-            src={staticFile(WALKER_GIF)}
-            width={WALKER_WIDTH}
-            height={WALKER_HEIGHT}
-            fit="fill"
-            loopBehavior="loop"
-          />
-        </div>
+        />
       ))}
     </AbsoluteFill>
   );
