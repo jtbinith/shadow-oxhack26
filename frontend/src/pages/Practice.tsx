@@ -9,6 +9,7 @@ import { MistakeDetector, THRESHOLDS, describe, holding, howTo, type Mistake, ty
 import { anchor, drawArrow, drawBodyGhost, drawPose, fitAt } from '../coach/draw'
 import { click, makeSpeak, speakFallback } from '../coach/voice'
 import { parseCommand, type Action } from '../coach/commands'
+import QuickLink from '../QuickLink'
 import { styleCue, styleFor } from '../coach/styles'
 
 // Practice is one continuous flow: the routine video plays (it is the clock), the ghost moves
@@ -762,6 +763,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const [asking, setAsking] = useState(false)
   const [listening, setListening] = useState(false)
   const [handsFree, setHandsFree] = useState(false)
+  // What hands-free listening is doing right now, shown to the learner (so problems are visible).
+  const [hfStatus, setHfStatus] = useState<string | null>(null)
   const recogniser = useRef<SpeechRecognitionLike | null>(null)
   const [coachAnswer, setCoachAnswer] = useState<(Answer & { instant?: boolean }) | null>(null)
   const [more, setMore] = useState<Answer | null>(null) // the coach agent's extra tips after an instant answer
@@ -890,18 +893,34 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const showCaptionRef = useRef(showCaption)
   showCaptionRef.current = showCaption
   useEffect(() => {
-    if (!handsFree || !Recognition) return
+    if (!handsFree || !Recognition) {
+      setHfStatus(null)
+      return
+    }
     let alive = true
     let r: SpeechRecognitionLike | null = null
+    let retry = 250
     const startRec = () => {
       if (!alive) return
+      // Don't listen while the coach is talking (the mic would pick up the speaker).
+      if (speak.busy()) {
+        setHfStatus('Waiting for the coach to finish…')
+        window.setTimeout(startRec, 300)
+        return
+      }
+      setHfStatus('Listening. Say "pause", "slower", or ask anything.')
       r = new Recognition()
       r.lang = 'en-GB'
       r.interimResults = true
       r.maxAlternatives = 1
       r.continuous = true
       r.onresult = (e) => {
-        if (speak.busy()) return // that's the coach talking, not you
+        retry = 250
+        if (speak.busy()) {
+          // That's the coach's own voice: throw this listening session away and start fresh.
+          ;(r as unknown as { abort?: () => void })?.abort?.()
+          return
+        }
         const i = e.resultIndex ?? e.results.length - 1
         const res = e.results[i]
         const text = res[0].transcript.trim()
@@ -914,13 +933,27 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         void askRef.current(text)
       }
       r.onerror = (e) => {
-        if (e?.error === 'not-allowed') {
+        const err = e?.error
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
           alive = false
           setHandsFree(false)
+          setNote('Hands-free needs the microphone. Allow it in the browser (the icon in the address bar), then turn it on again.')
+        } else if (err === 'audio-capture') {
+          alive = false
+          setHandsFree(false)
+          setNote('No microphone found, so hands-free is off.')
+        } else if (err === 'network') {
+          setHfStatus("Can't reach the speech service (it needs internet). Retrying…")
+          retry = Math.min(retry * 2, 5000)
         }
+        // 'no-speech' and 'aborted' are normal: it just restarts.
       }
-      r.onend = () => { if (alive) window.setTimeout(startRec, 250) }
-      r.start()
+      r.onend = () => { if (alive) window.setTimeout(startRec, retry) }
+      try {
+        r.start()
+      } catch {
+        window.setTimeout(startRec, 500) // another recogniser was still closing
+      }
     }
     startRec()
     return () => {
@@ -938,7 +971,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   return (
     <section className="practice">
       <header className="practice-head">
-        <button className="link" onClick={() => { halt(); onExit() }}>← Lesson tree</button>
+        <QuickLink back onClick={() => { halt(); onExit() }}>Lesson tree</QuickLink>
         <h2>{title}</h2>
         <span className="chip">{speed}×</span>
         <button className="chip" onClick={() => setGhostMode((m) => (m === '3d' ? 'flat' : '3d'))} title="Switch the ghost between 3D and flat">
@@ -946,7 +979,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         </button>
         {Recognition && (
           <button className={`chip ${handsFree ? 'live' : ''}`} onClick={() => setHandsFree((h) => !h)} title='Talk to the coach while you dance: "pause", "slower", "show me count 3", or ask anything'>
-            {handsFree ? 'Hands-free on' : 'Hands-free off'}
+            {handsFree ? 'Hands-free mic: on' : 'Hands-free mic: off'}
           </button>
         )}
         <button className="chip persona" onClick={() => setPersona((p) => (p === 'hype' ? 'calm' : 'hype'))} title="Switch coach voice">
@@ -960,12 +993,13 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
               <form onSubmit={(e) => { e.preventDefault(); void askCoach(question) }}>
                 <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
                 {Recognition && (
-                  <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title={listening ? "Stop listening" : "Ask out loud"} aria-label={listening ? "Stop listening" : "Ask out loud"}>
+                  <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking || handsFree} title={listening ? "Stop listening" : "Ask out loud"} aria-label={listening ? "Stop listening" : "Ask out loud"}>
                     <MicIcon />{listening && <span className="mic-label">Listening…</span>}
                   </button>
                 )}
                 <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
               </form>
+              {handsFree && hfStatus && !caption && <p className="caption hf-status"><span className="label">Hands-free</span>{hfStatus}</p>}
               {caption && (
                 <p className={`caption ${caption.sent ? 'sent' : ''}`} aria-live="polite">
                   <span className="label">{caption.sent ? 'You said' : 'Hearing'}</span>
@@ -1076,9 +1110,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {(phase === 'flowing' || phase === 'countin' || phase === 'watching') && (
         <div className="controls">
           {phase === 'watching' && S.current.demoBack === 'paused' && (
-            <button onClick={() => { halt(); setPhase('paused') }}>← Back to the fix</button>
+            <QuickLink back onClick={() => { halt(); setPhase('paused') }}>Back to the fix</QuickLink>
           )}
-          {phase === 'watching' && S.current.demoBack !== 'paused' && <button onClick={stop}>← Back</button>}
+          {phase === 'watching' && S.current.demoBack !== 'paused' && <QuickLink back onClick={stop}>Back</QuickLink>}
           {phase === 'flowing' && <button className="icon" onClick={() => stopFor(null, 'manual')} title="Pause" aria-label="Pause"><PauseIcon /></button>}
           {phase !== 'watching' && <button className="icon" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>}
         </div>
@@ -1104,7 +1138,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             {pause.how && <button onClick={fixIt}>How do I fix it?</button>}
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
             <button onClick={() => demo(pause.seg, pause.count)}>Show me slowly</button>
-            <button onClick={skipAhead}>Skip ahead →</button>
+            <QuickLink onClick={skipAhead}>Skip ahead</QuickLink>
             <button className="icon" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>
           </div>
         </div>
@@ -1123,7 +1157,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <div className="controls">
             <button className="primary" onClick={() => begin()}>Flow again</button>
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
-            {mode === 'step' && <button className={summary.passed ? 'primary' : ''} onClick={onNextStep}>Next step →</button>}
+            {mode === 'step' && <QuickLink className={summary.passed ? 'primary' : ''} onClick={onNextStep}>Next step</QuickLink>}
             <button onClick={() => { halt(); onExit() }}>Lesson tree</button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApi, type Routine } from '../api'
+import QuickLink from '../QuickLink'
 import { STYLES } from '../coach/styles'
 
 type Summary = Pick<Routine, 'id' | 'title' | 'status' | 'tempo_bpm' | 'created_at'> & { steps_total?: number; steps_passed?: number }
@@ -101,9 +102,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
             </li>
           ))}
         </ul>
-        <button className="link" onClick={tryCamera}>
-          Just try the camera →
-        </button>
+        <QuickLink onClick={tryCamera}>Just try the camera</QuickLink>
       </section>
     </div>
     </>

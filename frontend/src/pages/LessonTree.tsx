@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import QuickLink from '../QuickLink'
 import { phraseName, useApi, type Routine, type Step } from '../api'
 
 type Progress = { steps: { index: number; best_speed: number | null; unlocked: boolean }[] }
@@ -56,7 +57,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
   return (
     <section className="tree">
       <header className="tree-head">
-        <button className="link back" onClick={back}>← My routines</button>
+        <QuickLink back onClick={back}>My routines</QuickLink>
         <h2>{routine.title}</h2>
         <p className="notice">
           {Math.round(routine.tempo_bpm ?? 0)} BPM · {routine.eight_counts.length} {routine.eight_counts.every((e) => e.count_times.length === 4) ? 'four' : 'eight'}-count{routine.eight_counts.length === 1 ? '' : 's'}
@@ -66,7 +67,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
         {routine.lesson_plan.summary && <p>{routine.lesson_plan.summary}</p>}
         <div className="tree-actions">
           <button className="primary" onClick={flowAll} title="Dance the whole routine in one continuous run, stopping only on noticeable mistakes">Flow the whole routine</button>
-          <button className="link" onClick={showProgress}>See progress →</button>
+          <QuickLink onClick={showProgress}>See progress</QuickLink>
           <form
             className="replan"
             onSubmit={(e) => {

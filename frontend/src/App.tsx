@@ -6,6 +6,7 @@ import Processing from './pages/Processing'
 import LessonTree from './pages/LessonTree'
 import Practice from './pages/Practice'
 import ProgressPage from './pages/Progress'
+import QuickLink from './QuickLink'
 import { useApi, type Routine } from './api'
 
 // Navigation lives in the browser history, so the browser / phone back button works everywhere.
@@ -62,7 +63,7 @@ export default function App() {
         {view.name === 'routine' && <RoutineView id={view.id} screen={view.screen} go={go} back={back} />}
         {view.name === 'camera' && (
           <section>
-            <button className="link back" onClick={() => back(home)}>← Back</button>
+            <QuickLink back onClick={() => back(home)}>Back</QuickLink>
             <PoseCam />
           </section>
         )}
@@ -103,7 +104,7 @@ function RoutineView({ id, screen, go, back }: { id: string; screen: Screen } & 
   if (routine.status !== 'ready')
     return (
       <>
-        <button className="link back" onClick={() => back(home)}>← My routines</button>
+        <QuickLink back onClick={() => back(home)}>My routines</QuickLink>
         <Processing routine={routine} />
       </>
     )

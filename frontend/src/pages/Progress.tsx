@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import QuickLink from '../QuickLink'
 import { phraseName, useApi, type Routine } from '../api'
 
 type Stats = {
@@ -31,7 +32,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
   return (
     <section className="progress">
       <header className="practice-head">
-        <button className="link" onClick={back}>← Lesson tree</button>
+        <QuickLink back onClick={back}>Lesson tree</QuickLink>
         <h2>Progress · {routine.title}</h2>
       </header>
       <div className="tiles">
@@ -56,7 +57,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
         return weakest && weakest[1] < 85 ? (
           <div className="card weakest" data-title="weakest.txt">
             <h3>Weakest right now: {label(weakest[0])} (avg {Math.round(weakest[1])})</h3>
-            <button className="primary" onClick={() => practise(weakest[0])}>Practise it now →</button>
+            <QuickLink className="primary" onClick={() => practise(weakest[0])}>Practise it now</QuickLink>
           </div>
         ) : null
       })()}

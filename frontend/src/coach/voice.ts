@@ -1,12 +1,18 @@
 // The coach's voice: ElevenLabs audio (cached twice — server-side per line, and as object
 // URLs here), falling back to the browser's built-in speech when it's unavailable.
 const clipCache = new Map<string, string>()
+// When the coach last made a sound. Speech-to-text delivers words up to ~1 s after the audio
+// stops, so listening has to keep ignoring the mic for a moment after the coach finishes.
+let lastSoundAt = 0
+const ECHO_MS = 1500
 
 export function speakFallback(text: string, rate = 1.05) {
   if (!('speechSynthesis' in window)) return
   window.speechSynthesis.cancel()
   const u = new SpeechSynthesisUtterance(text)
   u.rate = rate
+  lastSoundAt = performance.now()
+  u.onend = () => { lastSoundAt = performance.now() }
   window.speechSynthesis.speak(u)
 }
 
@@ -74,14 +80,15 @@ export function makeSpeak(getToken: () => Promise<string | null>, persona: () =>
       const a = new Audio(url)
       playing = a
       await new Promise<void>((done) => {
-        a.onended = () => done()
+        a.onended = () => { lastSoundAt = performance.now(); done() }
         a.onerror = () => done()
         a.play().catch(() => done())
       })
     }
   }
   /** Is the coach talking right now? (so hands-free listening ignores the coach's own voice) */
-  speak.busy = () => (!!playing && !playing.paused && !playing.ended) || !!window.speechSynthesis?.speaking
+  speak.busy = () =>
+    (!!playing && !playing.paused && !playing.ended) || !!window.speechSynthesis?.speaking || performance.now() - lastSoundAt < ECHO_MS
   speak.prefetch = (text: string) => {
     for (const l of chunks(text)) void clip(l).catch(() => null)
   }

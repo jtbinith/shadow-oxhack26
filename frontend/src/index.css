@@ -254,3 +254,14 @@ th { border-bottom: var(--line); }
 .intro h1 { font-size: clamp(2.6rem, 6vw, 4.2rem); margin: 0 0 0.6rem; }
 .intro p { font-size: 1.15rem; max-width: 46ch; margin: 0; }
 .ask .mic { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
+/* Quick links (back / forward), like the reference's grey link tiles */
+.quicklink {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 1.2rem; min-width: 11rem;
+  background: var(--chrome); color: var(--ink); border: var(--line); border-radius: 0; padding: 0.45rem 0.8rem;
+  font: 700 1rem 'Baloo 2', system-ui, sans-serif; cursor: pointer; box-shadow: 3px 3px 0 var(--edge); text-align: left;
+}
+.quicklink.back { justify-content: flex-start; gap: 0.6rem; min-width: 0; margin: 0 0 1rem; }
+.quicklink:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--edge); }
+.quicklink:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--edge); }
+.quicklink.primary { background: var(--ink); color: var(--paper); }
+.practice-head .quicklink.back, .controls .quicklink, .tree-actions .quicklink { margin: 0; }
