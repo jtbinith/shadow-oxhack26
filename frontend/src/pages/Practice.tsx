@@ -21,7 +21,7 @@ type SpeechRecognitionLike = {
   lang: string
   interimResults: boolean
   maxAlternatives: number
-  onresult: ((e: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null
+  onresult: ((e: { resultIndex?: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null
   onend: (() => void) | null
   onerror: ((e?: { error?: string }) => void) | null
   continuous?: boolean
@@ -800,6 +800,24 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   askRef.current = askCoach
   const Recognition = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
     ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition
+  // Live speech-to-text: what's been heard so far (settled words) and what it's still guessing.
+  const [caption, setCaption] = useState<{ settled: string; guess: string; sent?: boolean } | null>(null)
+  const captionTimer = useRef(0)
+  const showCaption = (settled: string, guess: string, sent = false) => {
+    window.clearTimeout(captionTimer.current)
+    setCaption({ settled, guess, sent })
+    if (sent) captionTimer.current = window.setTimeout(() => setCaption(null), 5000)
+  }
+  const split = (results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>, from = 0) => {
+    let settled = ''
+    let guess = ''
+    for (let i = from; i < results.length; i++) {
+      if (results[i].isFinal) settled += results[i][0].transcript
+      else guess += results[i][0].transcript
+    }
+    return { settled: settled.trim(), guess: guess.trim() }
+  }
+
   const listen = () => {
     if (!Recognition) return
     if (listening) {
@@ -812,24 +830,33 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     r.maxAlternatives = 1
     let finalText = ''
     r.onresult = (e) => {
-      const text = Array.from(e.results).map((res) => res[0].transcript).join(' ')
-      setQuestion(text)
-      if (e.results[e.results.length - 1].isFinal) finalText = text
+      const { settled, guess } = split(e.results)
+      setQuestion(`${settled} ${guess}`.trim())
+      showCaption(settled, guess)
+      finalText = settled
     }
     r.onend = () => {
       setListening(false)
       recogniser.current = null
-      if (finalText.trim().length >= 2) void askCoach(finalText)
+      if (finalText.trim().length >= 2) {
+        showCaption(finalText, '', true)
+        void askCoach(finalText)
+      } else setCaption(null)
     }
-    r.onerror = () => setListening(false)
+    r.onerror = () => {
+      setListening(false)
+      setCaption(null)
+    }
     recogniser.current = r
     setListening(true)
+    showCaption('', '')
     r.start()
   }
 
   // Hands-free: always listening, so "pause", "slower" or a question work mid-dance.
   // What the coach itself says is ignored (the mic would hear the speaker).
-  const [heard, setHeard] = useState<string | null>(null)
+  const showCaptionRef = useRef(showCaption)
+  showCaptionRef.current = showCaption
   useEffect(() => {
     if (!handsFree || !Recognition) return
     let alive = true
@@ -838,15 +865,20 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       if (!alive) return
       r = new Recognition()
       r.lang = 'en-GB'
-      r.interimResults = false
+      r.interimResults = true
       r.maxAlternatives = 1
       r.continuous = true
       r.onresult = (e) => {
-        const res = e.results[e.results.length - 1]
-        if (!res.isFinal || speak.busy()) return
+        if (speak.busy()) return // that's the coach talking, not you
+        const i = e.resultIndex ?? e.results.length - 1
+        const res = e.results[i]
         const text = res[0].transcript.trim()
+        if (!res.isFinal) {
+          if (text) showCaptionRef.current('', text)
+          return
+        }
         if (text.length < 2) return
-        setHeard(text)
+        showCaptionRef.current(text, '', true)
         void askRef.current(text)
       }
       r.onerror = (e) => {
@@ -902,6 +934,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
                 )}
                 <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
               </form>
+              {caption && (
+                <p className={`caption ${caption.sent ? 'sent' : ''}`} aria-live="polite">
+                  <span className="label">{caption.sent ? 'You said' : 'Hearing'}</span>
+                  {caption.settled || caption.guess ? <>{caption.settled} <i>{caption.guess}</i></> : <i>Listening… start talking</i>}
+                </p>
+              )}
               {coachAnswer && (
                 <div className="coach-says">
                   <p>
@@ -928,6 +966,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
+          {caption && (phase === 'flowing' || phase === 'countin' || phase === 'watching') && (
+            <div className="caption-overlay" aria-hidden="true">{caption.settled} <i>{caption.guess}</i></div>
+          )}
           {phase === 'flowing' && <div className="recording">Flowing · {phraseName(routine, segNo(calling?.seg ?? S.current.seg) - 1)}</div>}
           {phase === 'paused' && <div className="recording paused">Paused</div>}
           {phase === 'flowing' && calling && (
@@ -945,7 +986,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       </div>
 
       {note && <p className="notice flow-note">{note}</p>}
-      {handsFree && heard && <p className="notice heard">Heard: “{heard}”</p>}
+
       {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
       {phase === 'loading' && <p className="notice">Loading the routine…</p>}
 

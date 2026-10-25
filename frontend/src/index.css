@@ -177,3 +177,9 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .routine-progress .pbar { flex: 1; }
 .routines button { flex-wrap: wrap; }
 button.icon { display: inline-grid; place-items: center; padding: 0.45rem 0.6rem; line-height: 0; }
+/* Live speech-to-text */
+.caption { margin: 0.5rem 0 0; padding: 0.5rem 0.7rem; border-radius: 10px; background: #1d1928; border: 1px solid #3a3448; font-size: 1rem; line-height: 1.4; }
+.caption .label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; margin-bottom: 0.15rem; }
+.caption i, .caption-overlay i { opacity: 0.55; font-style: normal; }
+.caption.sent { border-color: var(--spot); }
+.caption-overlay { position: absolute; top: 0.8rem; left: 50%; transform: translateX(-50%); max-width: 80%; background: rgba(0,0,0,0.65); color: #fff; padding: 0.35rem 0.8rem; border-radius: 10px; font-size: 1.05rem; pointer-events: none; }
