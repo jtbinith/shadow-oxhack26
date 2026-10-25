@@ -436,3 +436,6 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* Logo: a white crow in a black rounded square */
 .logo-mark { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 12px; background: var(--ink); color: var(--paper); flex-shrink: 0; }
 .logo-mark .crow { color: var(--paper); margin: 4px 0 0 2px; }
+/* The lesson-plan window is a <header>: don't let the generic header row layout apply to it. */
+.tree-head { display: block; }
+.tree-head .tree-actions { justify-content: flex-start; }
