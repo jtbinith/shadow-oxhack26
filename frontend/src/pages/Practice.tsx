@@ -12,7 +12,7 @@ import QuickLink from '../QuickLink'
 import Crow from '../brand/Crow'
 import Murder from '../brand/Murder'
 import MurderPerch from '../brand/MurderPerch'
-import { stepCrows, targetCrows } from '../coach/murder'
+import { NO_CROWS, isMurder, onClean, onMistake } from '../coach/murder'
 import LoadingScreen from '../brand/LoadingScreen'
 import { styleCue, styleFor } from '../coach/styles'
 
@@ -76,7 +76,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const [held, setHeld] = useState(false)
   // The murder meter: crows gather as the dancing drifts towards the stop threshold.
   const [crows, setCrows] = useState(0)
-  const crowsRef = useRef({ n: 0, at: 0 })
+  const crowsRef = useRef(NO_CROWS)
   // Which pause the third crow has landed for (the card's "It's a murder!" waits for it).
   const [murderFor, setMurderFor] = useState<object | null>(null)
   const onMurderFull = useCallback(() => setMurderFor(pause), [pause])
@@ -97,15 +97,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const exitFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
   }
-  // One crow at a time towards what the pressure calls for.
-  const updateCrows = (pressure: number) => {
+  // Each mistake sends a crow, at most one per cooldown; a clean stretch sends one away.
+  const updateCrows = (mistake: boolean) => {
     const c = crowsRef.current
     const now = performance.now()
-    const next = stepCrows(c.n, targetCrows(pressure), now - c.at)
-    if (next !== c.n) {
-      crowsRef.current = { n: next, at: now }
-      setCrows(next)
-    }
+    const next = mistake ? onMistake(c, now) : onClean(c, now)
+    crowsRef.current = next
+    if (next.n !== c.n) setCrows(next.n)
+    return next
   }
   const [giveUp, setGiveUp] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -322,7 +321,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     setPause(null)
     setHeld(false)
     setSummary(null)
-    crowsRef.current = { n: 0, at: 0 }
+    crowsRef.current = NO_CROWS
     setCrows(0)
     const beat = ((all.counts[1] - all.counts[0]) || 0.5) / st.speed
     const countIn = () => {
@@ -559,10 +558,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     st.samples.push({ t: t - (st.segs[k]?.off ?? 0), frame })
     const s = st.detector?.push(t, frame)
     if (s) st.lastErrs = s.errs
-    // 0 crows while it's going well; one more for each step closer to a stop; 5 = a murder (stop).
-    updateCrows(st.detector?.pressure(t) ?? 0)
+    // Each mistake sends a crow (one per cooldown, however long the slip lasts); three is a murder: stop.
     const m = st.detector?.check(t)
-    if (m) stopFor(m)
+    const flock = updateCrows(!!m)
+    if (m && isMurder(flock)) stopFor(m)
   }, [finishSection, flowFrom, now, recordSeg, say, stopFor])
 
   // ---- the ghost: the routine's pose for "now" (the frozen target while paused) ----
@@ -1155,8 +1154,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             </label>
           </div>
           <span className="notice">{scope === 'step'
-            ? 'Dance this step with the video. I stop you only when something is noticeably off, show the fix, let you try it, then go again. One clean run with no stops passes the step.'
-            : 'One continuous run with the video. I stop you only when something is noticeably off, show the fix, then we go again from that part and on past it.'}</span>
+            ? 'Dance this step with the video. Each slip sends a crow (one per 2 seconds at most). Three crows is a murder: I stop you, show the fix, let you try it, then go again. One clean run with no stops passes the step.'
+            : 'One continuous run with the video. Each slip sends a crow (one per 2 seconds at most). Three crows is a murder: I stop you, show the fix, then we go again from that part and on past it.'}</span>
         </>
       )}
 

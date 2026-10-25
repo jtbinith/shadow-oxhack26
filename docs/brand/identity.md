@@ -5,11 +5,12 @@ Shadow's mascot is a crow: a chunky black silhouette with a big white ring eye, 
 A group of crows is called a **murder**. That's the hook for the coaching:
 
 - While you dance well, there are no crows.
-- As your dancing drifts towards the stop threshold, crows land one at a time (at least 450 ms apart) on a
-  perch **above** the camera, never covering it (the "murder meter", `frontend/src/coach/murder.ts`):
-  1. **"Just a crow…"** (60% of the way to the threshold)
-  2. **"An attempted murder…"** (80%)
-  3. **"It's a murder!"** in a red speech bubble at the threshold. The flow stops and shows the fix.
+- Each mistake sends a crow to a perch **above** the camera, never covering it (the "murder meter",
+  `frontend/src/coach/murder.ts`). After a crow lands there's a 2-second cooldown: more mistakes inside it
+  don't send another; the next mistake after it sends the next crow. A 4-second clean stretch sends one away.
+  1. **"Just a crow…"** (one mistake)
+  2. **"An attempted murder…"** (a second, after the cooldown)
+  3. **"It's a murder!"** in a red speech bubble (a third). The flow stops and shows the fix.
 - The perched crows are the hopping crows. Speech bubbles have no outline and an equilateral tail at 45°.
 - A clean run: **"Not a crow in sight."**
 
