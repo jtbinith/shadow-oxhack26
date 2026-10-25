@@ -526,14 +526,18 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* Three dancing crows in the empty top-right of the hero */
 .intro, .hero { position: relative; }
 .dancing-crows { position: absolute; bottom: 1.4rem; right: 3.6rem; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }
-.dancer { display: inline-block; transform-origin: 50% 100%; }
-.dancer.sway-l { animation: crow-sway 2s ease-in-out infinite; }
-.dancer.sway-r { animation: crow-sway 2s ease-in-out infinite reverse; }
+.dancer { display: inline-block; }
+/* Only the crow sways; its shadow stays flat on the ground */
+.dancer .hop-frame { transform-origin: 50% 100%; }
+.dancer.sway-l .hop-frame.ground { animation: crow-ground 2s steps(1) infinite, crow-sway 2s ease-in-out infinite; }
+.dancer.sway-l .hop-frame.air { animation: crow-air 2s steps(1) infinite, crow-sway 2s ease-in-out infinite; }
+.dancer.sway-r .hop-frame.ground { animation: crow-ground 2s steps(1) infinite, crow-sway 2s ease-in-out infinite reverse; }
+.dancer.sway-r .hop-frame.air { animation: crow-air 2s steps(1) infinite, crow-sway 2s ease-in-out infinite reverse; }
 .dancer.flip .hopping-crow { transform: scaleX(-1); }
 @keyframes crow-sway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
 @media (max-width: 760px) { .dancing-crows { display: none; } }
 @media (prefers-reduced-motion: reduce) { .dancer, .dancing-crows .hop-body, .dancing-crows .hop-frame, .dancing-crows .hop-shadow { animation: none !important; } }
 /* Home (wide box): crows centred in the empty right half, note on one or two lines */
-.intro .dancing-crows { bottom: auto; top: 50%; right: 14%; transform: translateY(-50%); gap: 1rem; }
+.intro .dancing-crows { bottom: auto; top: 60%; right: 14%; transform: translateY(-50%); gap: 1rem; }
 .intro p.lore { max-width: 60ch; }
 @media (max-width: 1100px) { .intro .dancing-crows { display: none; } }
