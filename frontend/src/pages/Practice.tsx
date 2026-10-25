@@ -3,7 +3,6 @@ import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
 import { useAuth } from '@clerk/clerk-react'
 import { phraseName, useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, normaliseFrame, refFrame, refFrameDisplay, scoreRep, type Frame, type RefData, type UserSample } from '../coach/score'
-import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
 import { MistakeDetector, THRESHOLDS, describe, holding, howTo, type Mistake, type Sensitivity } from '../coach/live'
 import { anchor, drawArrow, drawBodyGhost, drawPose, fitAt } from '../coach/draw'
@@ -657,38 +656,6 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     }, 100)
   }
 
-  // ---- mic sync: their own copy of the song starts the flow on the beat ----
-  const [syncMsg, setSyncMsg] = useState<string | null>(null)
-  const syncToMusic = async () => {
-    const all = S.current.all
-    if (!all) return
-    setSyncMsg('Listening… play the song out loud')
-    try {
-      const { pcm, endedAt } = await recordSnippet(6)
-      setSyncMsg('Finding your place in the song…')
-      const res = await api<{ position: number | null; confidence: number }>(`/api/routines/${routine.id}/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: pcm.buffer as ArrayBuffer,
-      })
-      if (res.position === null || res.confidence < 0.3) {
-        setSyncMsg("Couldn't hear the song clearly. Turn it up, move closer, and try again.")
-        return
-      }
-      const songNow = res.position + (performance.now() - endedAt) / 1000
-      const delay = countInDelay(songNow, [S.current.secStart], (all.counts[1] - all.counts[0]) || 0.5)
-      if (delay === null) {
-        setSyncMsg('This part of the song has passed. Restart the song and press Sync again.')
-        return
-      }
-      setSyncMsg(`Synced. Count-in in ${Math.round(delay)} s.`)
-      begin(0, delay, true)
-      window.setTimeout(() => setSyncMsg(null), delay * 1000 + 2000)
-    } catch (e) {
-      setSyncMsg(e instanceof Error && e.name === 'NotAllowedError' ? 'Microphone blocked: allow it in the browser to sync.' : "Sync didn't work this time. Use Start instead.")
-    }
-  }
-
   // ---- acting on what the learner says ----
   const skipAhead = () => {
     const st = S.current
@@ -1108,7 +1075,6 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
       {note && <p className="notice flow-note">{note}</p>}
 
-      {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
       {phase === 'loading' && <LoadingScreen overlay label="Loading the routine…" />}
 
       {phase === 'ready' && (
@@ -1129,11 +1095,6 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <div className="controls">
             <button className="go" onClick={() => begin()}>Start flowing ({speed}×)</button>
             <button className="go" onClick={watch}>Watch it first</button>
-            {routine.beat_source === 'music' && (
-              <button className="go" onClick={() => void syncToMusic()} disabled={speed !== 1 || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
-                Sync to my music
-              </button>
-            )}
             <label>
               Speed{' '}
               <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>

@@ -9,8 +9,10 @@ import {
 import { Gif } from '@remotion/gif';
 
 const WORD = 'SHADOW';
+// walk.gif = solid silhouette, walk-outline.gif = white line art from the video clip
+const WALKER_GIF = 'walk-outline.gif';
 const LETTER_WIDTH = 150;
-// Matches public/walk.gif; wider than a letter so a walker hides the letter it is crossing
+// Matches the walker GIFs in public/; wider than a letter so a walker hides the letter it is crossing
 const WALKER_WIDTH = 162;
 const WALKER_HEIGHT = 299;
 
@@ -117,7 +119,7 @@ export const ShadowReveal: React.FC = () => {
           }}
         >
           <Gif
-            src={staticFile('walk.gif')}
+            src={staticFile(WALKER_GIF)}
             width={WALKER_WIDTH}
             height={WALKER_HEIGHT}
             fit="fill"
