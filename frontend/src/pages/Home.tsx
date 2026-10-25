@@ -112,7 +112,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
             </li>
           ))}
         </ul>
-        <QuickLink onClick={tryCamera}>Just try the camera</QuickLink>
+        <QuickLink className="primary" onClick={tryCamera}>Just try the camera</QuickLink>
       </section>
     </div>
     </>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import QuickLink from '../QuickLink'
-import { phraseName, useApi, type Routine, type Step } from '../api'
+import { phraseName, useApi, type Routine } from '../api'
 
 type Progress = { steps: { index: number; best_speed: number | null; unlocked: boolean }[] }
 
@@ -10,36 +10,6 @@ const TIERS = [
   { speed: 0.75, name: 'silver' },
   { speed: 1, name: 'gold' },
 ]
-
-// Building blocks: the bottom row is each phrase on its own; every block above joins the
-// phrases under it into a checkpoint, up to the whole routine at the top. A block sits over
-// exactly the phrases it contains, so the chaining (A, B, A+B, C, A+B+C…) is visible.
-type Block = { step: number; from: number; to: number; row: number }
-
-export function layoutBlocks(steps: Step[], columns: number[]): { blocks: Block[]; rows: number } {
-  const col = new Map(columns.map((idx, c) => [idx, c]))
-  const items = steps.map((s, i) => {
-    const cs = s.eight_counts.map((e) => col.get(e) ?? 0)
-    return { step: i, from: Math.min(...cs), to: Math.max(...cs), single: s.type === 'learn' && s.eight_counts.length === 1 }
-  })
-  const blocks: Block[] = []
-  const base = new Set<number>()
-  // Row 0: the first "learn" step for each phrase.
-  for (const it of items) {
-    if (it.single && !base.has(it.from)) {
-      base.add(it.from)
-      blocks.push({ step: it.step, from: it.from, to: it.to, row: 0 })
-    }
-  }
-  // Everything else, narrowest first: above anything it contains, in the lowest free row.
-  const rest = items.filter((it) => !blocks.some((b) => b.step === it.step)).sort((a, b) => a.to - a.from - (b.to - b.from) || a.step - b.step)
-  for (const it of rest) {
-    let row = 1 + Math.max(0, ...blocks.filter((b) => b.from >= it.from && b.to <= it.to).map((b) => b.row))
-    while (blocks.some((b) => b.row === row && b.from <= it.to && it.from <= b.to)) row++
-    blocks.push({ step: it.step, from: it.from, to: it.to, row })
-  }
-  return { blocks, rows: Math.max(0, ...blocks.map((b) => b.row)) + 1 }
-}
 
 // A still from the routine video for one phrase (needs the auth token, so fetched as a blob).
 function useThumb(routineId: string, idx: number) {
@@ -50,7 +20,9 @@ function useThumb(routineId: string, idx: number) {
     let live = true
     ;(async () => {
       try {
-        const res = await fetch(`/api/routines/${routineId}/eight-counts/${idx}/thumb`, { headers: { Authorization: `Bearer ${await getToken()}` } })
+        const get = async () => fetch(`/api/routines/${routineId}/eight-counts/${idx}/thumb`, { headers: { Authorization: `Bearer ${await getToken()}` } })
+        let res = await get()
+        if (!res.ok) res = await new Promise<Response>((r) => setTimeout(() => void get().then(r), 800)) // one retry
         if (!res.ok || !live) return
         u = URL.createObjectURL(await res.blob())
         setUrl(u)
@@ -112,7 +84,9 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
   const steps = routine.lesson_plan.steps ?? []
   const repeats = routine.eight_counts.filter((e) => e.repeat_of !== null)
   const columns = [...new Set(steps.flatMap((s) => s.eight_counts))].sort((a, b) => a - b)
-  const { blocks, rows } = layoutBlocks(steps, columns)
+  const indexed = steps.map((s, i) => ({ s, i }))
+  const phrases = indexed.filter(({ s }) => s.type === 'learn')
+  const checkpoints = indexed.filter(({ s }) => s.type === 'chain')
   const passed = progress ? progress.steps.filter((p) => p.best_speed !== null).length : 0
   const allFour = routine.eight_counts.every((e) => e.count_times.length === 4)
   const looked = coachSays?.actions.map((a) => a.replace('get_', '').replace('update_lesson_plan', 'rewrote your plan').replace('_', ' ')) ?? []
@@ -151,37 +125,54 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
         )}
       </section>
 
-      <div className="blocks-scroll">
-        <ol className="blocks" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(150px, 1fr))` }}>
-          {blocks.map((b) => {
-            const s = steps[b.step]
-            const p = progress?.steps[b.step]
-            const locked = p ? !p.unlocked : b.step > 0
-            const best = p?.best_speed ?? 0
-            const whole = s.type === 'chain' && b.from === 0 && b.to === columns.length - 1 && columns.length > 1
-            const ec = routine.eight_counts.find((e) => e.idx === s.eight_counts[0])
-            return (
-              <li
-                key={b.step}
-                className={`block ${b.row === 0 ? 'base' : 'chain'} ${locked ? 'locked' : ''} ${best > 0 ? 'done' : ''}`}
-                style={{ gridColumn: `${b.from + 1} / ${b.to + 2}`, gridRow: rows - b.row }}
-              >
-                <button disabled={locked} onClick={() => practise(b.step)} title={locked ? 'Pass the step before to unlock' : 'Practise this'}>
-                  {b.row === 0 && <Thumb routineId={routine.id} idx={s.eight_counts[0]} />}
-                  <span className="block-label">
-                    {b.row === 0 ? phraseName(routine, s.eight_counts[0]) : whole ? 'Whole routine' : `Checkpoint ${s.eight_counts[0] + 1}–${s.eight_counts[s.eight_counts.length - 1] + 1}`}
-                  </span>
-                  {b.row === 0 && ec?.name && <span className="block-moves">{ec.name}</span>}
-                  <span className="block-foot">
-                    <Medals best={best} />
-                    <span className="notice">{locked ? 'locked' : `from ${s.start_speed}×`}</span>
-                  </span>
-                </button>
-              </li>
-            )
-          })}
-        </ol>
-      </div>
+      {/* The phrases, each learnt on its own */}
+      <ol className="phrases" aria-label="Phrases">
+        {phrases.map(({ s, i }) => {
+          const p = progress?.steps[i]
+          const locked = p ? !p.unlocked : i > 0
+          const best = p?.best_speed ?? 0
+          const ec = routine.eight_counts.find((e) => e.idx === s.eight_counts[0])
+          return (
+            <li key={i} className={`phrase ${locked ? 'locked' : ''} ${best > 0 ? 'done' : ''}`}>
+              <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Pass the step before to unlock' : `Practise ${phraseName(routine, s.eight_counts[0])}`}>
+                <Thumb routineId={routine.id} idx={s.eight_counts[0]} />
+                <span className="phrase-label">{phraseName(routine, s.eight_counts[0])}</span>
+                {ec?.name && <span className="phrase-moves">{ec.name}</span>}
+                <span className="phrase-foot">
+                  <Medals best={best} />
+                  <span className="notice">{locked ? 'locked' : `${s.start_speed}×`}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+
+      {/* Checkpoints: joining the phrases up, ending with the whole routine */}
+      {checkpoints.length > 0 && (
+        <div className="checkpoints">
+          <span className="checkpoints-title">Checkpoints</span>
+          <ol className="checkpoint-bar">
+            {checkpoints.map(({ s, i }, k) => {
+              const p = progress?.steps[i]
+              const locked = p ? !p.unlocked : true
+              const best = p?.best_speed ?? 0
+              const last = s.eight_counts
+              const whole = k === checkpoints.length - 1 && last.length === columns.length
+              const name = whole ? 'Whole routine' : `${last[0] + 1}–${last[last.length - 1] + 1}`
+              return (
+                <li key={i} className={`cp ${locked ? 'locked' : best > 0 ? 'done' : 'open'} ${whole ? 'whole' : ''}`}>
+                  <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Unlocks as you pass the phrases before it' : `Practise checkpoint ${name}`}>
+                    <span className="cp-node">{whole ? '★' : ''}</span>
+                    <span className="cp-label">{name}</span>
+                    {best > 0 && <Medals best={best} />}
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+      )}
     </section>
   )
 }

@@ -40,7 +40,6 @@ export default function Progress({ routine, back, practise }: { routine: Routine
         <h2>Progress · {routine.title}</h2>
       </header>
       <div className="tiles">
-        <div className="tile"><b>{s.streak}</b><span>day streak</span></div>
         <div className="tile"><b>{learnt}/{steps.length}</b><span>steps learnt</span></div>
         <div className="tile"><b>{s.totals.reps}</b><span>reps · {s.totals.minutes ?? 0} min</span></div>
         <div className="tile"><b>{s.totals.best_score ?? '—'}</b><span>best score</span></div>

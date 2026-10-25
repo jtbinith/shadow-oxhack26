@@ -8,7 +8,7 @@ type MyStats = {
   streak: number
   daily: { day: string; reps: number; avg_score: number }[]
   routines: { id: string; title: string; status: string; steps_total: number; steps_passed: number; reps: number; avg_score: number | null; best_speed: number | null; last_practised: string | null }[]
-  habits: { label: string; times: number; share: number; routine: string }[]
+  patterns: { label: string; times: number; share: number; routines: number }[]
 }
 
 function ago(iso: string | null) {
@@ -50,14 +50,14 @@ export default function MyProgress({ back, open }: { back: () => void; open: (id
 
       <div className="card habits-card" data-title="habits">
         <h3>Habits across your routines</h3>
-        <p className="notice">Found by AI clustering of your missed reps.</p>
+        <p className="notice">What keeps going wrong in all your practice: your missed reps grouped by the kind of mistake.</p>
         <ul className="habit-list">
-          {s.habits.length === 0 && <li className="notice">No patterns yet. Keep practising and they'll show up here.</li>}
-          {s.habits.map((h, i) => (
+          {s.patterns.length === 0 && <li className="notice">No patterns yet. Keep practising and they'll show up here.</li>}
+          {s.patterns.map((h, i) => (
             <li key={i}>
-              <span className="habit-label">{h.label} <span className="notice">· {h.routine}</span></span>
+              <span className="habit-label">{h.label}</span>
               <span className="pbar"><span style={{ width: `${Math.round(h.share * 100)}%` }} /></span>
-              <span className="notice">{Math.round(h.share * 100)}% of missed reps ({h.times})</span>
+              <span className="notice">{Math.round(h.share * 100)}% of missed reps · in {h.routines} routine{h.routines === 1 ? '' : 's'}</span>
             </li>
           ))}
         </ul>

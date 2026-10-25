@@ -21,12 +21,12 @@ from app.coach import clusters, engine
 # title, style, source ("long" = an 8-phrase routine, "short" = a 4-count), how far through the
 # plan, days practised (out of the last 6 weeks), random seed
 PLANS = [
-    ("Contemporary Spiral Flow", "contemporary", "long", 1.0, 26, 1),
-    ("Bollywood Thumka Basics", "bollywood", "long", 0.8, 18, 2),
-    ("Hip-Hop Bounce & Hit", "hiphop", "long", 0.45, 10, 3),
-    ("K-Pop Chorus Point", "kpop", "short", 1.0, 7, 4),
-    ("Street Jazz Warm-Up", "hiphop", "short", 1.0, 5, 5),
-    ("Bharatanatyam Adavu Drill", "bharatanatyam", "long", 0.15, 3, 6),
+    ("Popping Waves Flow", "hiphop", "long", 1.0, 26, 1),
+    ("Kuthu Beat Basics", "bollywood", "long", 0.8, 18, 2),
+    ("Cabbage Patch Bounce", "hiphop", "long", 0.45, 10, 3),
+    ("Locking Points Chorus", "hiphop", "short", 1.0, 7, 4),
+    ("Krump Stomp Warm-Up", "hiphop", "short", 1.0, 5, 5),
+    ("Harlem Shake Drill", "hiphop", "long", 0.15, 3, 6),
 ]
 WINDOW_DAYS = 42
 # Missed reps lean towards a couple of habits, so clustering finds them.

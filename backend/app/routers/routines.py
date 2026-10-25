@@ -214,9 +214,37 @@ def my_stats(user_id: str = User) -> dict:
                       (SELECT max(speed) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id AND s.passed) AS best_speed,
                       (SELECT max(time) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id) AS last_practised
                FROM routines r WHERE r.user_id = %s ORDER BY last_practised DESC NULLS LAST, r.created_at DESC""", (user_id,)).fetchall()
-        habits = c.execute(
-            """SELECT h.label, h.count AS times, h.share, r.title AS routine FROM error_clusters h JOIN routines r ON r.id = h.routine_id
-               WHERE h.user_id = %s ORDER BY h.count DESC LIMIT 5""", (user_id,)).fetchall()
+        faults = c.execute(
+            "SELECT routine_id, top_fault FROM rep_scores WHERE user_id = %s AND NOT passed AND top_fault IS NOT NULL", (user_id,)).fetchall()
         streak = streak_days(c, user_id)
     return {"totals": {**totals, "minutes": minutes}, "streak": streak, "daily": daily,
-            "routines": [{**r, "id": str(r["id"])} for r in routines], "habits": habits}
+            "routines": [{**r, "id": str(r["id"])} for r in routines], "patterns": patterns(faults)}
+
+
+NEEDS = {"higher": "too low", "lower": "too high", "out wider": "too close in", "in closer": "too wide"}
+
+
+def patterns(faults: list[dict]) -> list[dict]:
+    """What keeps going wrong across ALL routines: missed reps grouped by the kind of mistake
+    (which limb and which way, or late / early / soft / stiff), ignoring the count and the routine."""
+    from collections import Counter, defaultdict
+    groups: Counter = Counter()
+    where: dict = defaultdict(set)
+    for f in faults:
+        t = f["top_fault"] or {}
+        kind = t.get("type")
+        if kind == "shape":
+            part = (t.get("body_part") or "").replace("_", " ")
+            how = (t.get("direction") or "").replace("a touch ", "").replace("much ", "")
+            how = next((d for d in NEEDS if d in how), "")
+            if not part or not how:
+                continue
+            key = f"{part[0].upper()}{part[1:]} {NEEDS[how]}"
+        elif kind in ("late", "early", "soft", "stiff"):
+            key = {"late": "Late on the beat", "early": "Rushing ahead of the beat", "soft": "Hits too soft", "stiff": "Forcing it (too stiff)"}[kind]
+        else:
+            continue
+        groups[key] += 1
+        where[key].add(str(f["routine_id"]))
+    total = sum(groups.values()) or 1
+    return [{"label": k, "times": n, "share": round(n / total, 2), "routines": len(where[k])} for k, n in groups.most_common(5)]

@@ -311,24 +311,40 @@ button.primary:hover:not(:disabled), .card button.primary:hover:not(:disabled), 
 .plan-coach .replan { min-width: 0; }
 .plan-coach .coach-says { line-height: 1.5; }
 
-/* Building-block lesson layout */
-.blocks-scroll { overflow-x: auto; padding: 0.5rem 0.6rem 1.2rem 0; }
-.blocks { display: grid; gap: 1.1rem 0.8rem; list-style: none; padding: 0; margin: 0; }
-.block button {
-  width: 100%; height: 100%; display: flex; flex-direction: column; gap: 0.25rem; text-align: left; font-family: inherit;
-  background: var(--paper); color: var(--ink); border: var(--line); box-shadow: 4px 4px 0 var(--edge); padding: 0.5rem 0.6rem 0.55rem; cursor: pointer;
+/* Lesson plan: a compact row of phrases, then a checkpoint bar */
+.phrases { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 0.7rem; list-style: none; padding: 0; margin: 0 0 1.6rem; }
+.phrase button {
+  width: 100%; height: 100%; display: flex; flex-direction: column; gap: 0.15rem; text-align: left; font-family: inherit;
+  background: var(--paper); color: var(--ink); border: var(--line); box-shadow: 3px 3px 0 var(--edge); padding: 0.35rem 0.4rem 0.4rem; cursor: pointer;
 }
-.block button:hover:not(:disabled) { background: var(--chrome); }
-.block.chain button { background: var(--chrome); align-items: center; text-align: center; justify-content: center; }
-.block.chain button:hover:not(:disabled) { background: var(--paper); }
-.block.chain .block-foot { justify-content: center; gap: 0.8rem; }
-.block.locked button { background: #2a2a2a; color: #9a9a9a; border-color: #555; box-shadow: 4px 4px 0 #444; cursor: default; }
-.block.done button { border-width: 3px; }
-.block-thumb { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border: var(--line); background: #1a1a1a; box-sizing: border-box; }
-.block.locked .block-thumb { filter: grayscale(1) brightness(0.5); }
-.block-label { font-weight: 800; font-size: 1.05rem; }
-.block-moves { font-size: 0.85rem; font-weight: 600; line-height: 1.25; }
-.block-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; font-size: 0.85rem; }
+.phrase button:hover:not(:disabled) { background: var(--chrome); }
+.phrase.done button { border-width: 3px; }
+.phrase.locked button { background: #262626; color: #9a9a9a; border-color: #555; box-shadow: 3px 3px 0 #3a3a3a; cursor: default; }
+.block-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border: var(--line); background: #1a1a1a; box-sizing: border-box; }
+.phrase.locked .block-thumb { filter: grayscale(1) brightness(0.6); border-color: #555; }
+.phrase-label { font-weight: 800; font-size: 0.95rem; margin-top: 0.15rem; }
+.phrase-moves { font-size: 0.75rem; font-weight: 600; line-height: 1.2; opacity: 0.85; }
+.phrase-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 0.2rem; font-size: 0.75rem; }
+.phrase .tier { width: 11px; height: 11px; }
+
+.checkpoints { background: var(--paper); color: var(--ink); border: var(--line); box-shadow: var(--shadow); padding: 0.8rem 1.2rem 0.6rem; }
+.checkpoints-title { font-weight: 800; font-size: 1rem; }
+.checkpoint-bar { display: flex; list-style: none; padding: 0.8rem 0 0; margin: 0; overflow-x: auto; }
+.cp { flex: 1; min-width: 70px; position: relative; }
+.cp::before { content: ''; position: absolute; top: 13px; left: -50%; right: 50%; height: 3px; background: var(--ink); }
+.cp:first-child::before { display: none; }
+.cp.locked::before { background: #bbb; }
+.cp button { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0.25rem; background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit; color: var(--ink); }
+.cp button:disabled { cursor: default; color: #8a8a8a; }
+.cp-node { width: 24px; height: 24px; border: 3px solid var(--ink); background: var(--paper); transform: rotate(45deg); display: grid; place-items: center; font-size: 0.8rem; box-sizing: border-box; }
+.cp.done .cp-node { background: var(--ink); }
+.cp.open .cp-node { background: var(--cta); border-color: var(--ink); }
+.cp.locked .cp-node { border-color: #aaa; background: #eee; }
+.cp.whole .cp-node { transform: none; border-radius: 50%; width: 28px; height: 28px; }
+.cp button:hover:not(:disabled) .cp-node { transform: rotate(45deg) scale(1.15); }
+.cp.whole button:hover:not(:disabled) .cp-node { transform: scale(1.15); }
+.cp-label { font-weight: 700; font-size: 0.8rem; white-space: nowrap; }
+.cp .tiers .tier { width: 9px; height: 9px; border-width: 1.5px; }
 
 /* Habits list with share bars */
 .habits-card { margin-bottom: 1.2rem; }
