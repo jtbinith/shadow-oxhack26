@@ -19,13 +19,20 @@ from ..config import settings
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/tts", tags=["voice"])
 
-MODEL = "eleven_flash_v2_5"  # lowest latency; cues are short
-FORMAT = "mp3_22050_32"
+MODEL = "eleven_v4"  # the newest, most natural model (~1.5 s per line; lines are cached and prefetched)
+FORMAT = "mp3_44100_128"
+# Delivery per persona (lower stability = more expressive). Count-ins are punchier still.
+SETTINGS = {
+    "hype": {"stability": 0.35, "similarity_boost": 0.8, "style": 0.5, "use_speaker_boost": True},
+    "calm": {"stability": 0.55, "similarity_boost": 0.8, "style": 0.25, "use_speaker_boost": True},
+    "count": {"stability": 0.3, "similarity_boost": 0.85, "style": 0.65, "use_speaker_boost": True},
+}
 
 
 class TtsIn(BaseModel):
     text: str = Field(min_length=1, max_length=200)
     persona: str = Field(default="calm", pattern="^(calm|hype)$")
+    kind: str = Field(default="line", pattern="^(line|count)$")  # count = a count-in word ("Five!")
 
 
 def _voice(persona: str) -> str:
@@ -39,7 +46,8 @@ def tts(body: TtsIn, user_id: str = User) -> Response:
     voice = _voice(body.persona)
     if not settings.elevenlabs_api_key or not voice:
         raise HTTPException(503, "voice not configured")
-    key = hashlib.sha256(f"{voice}|{MODEL}|{body.text}".encode()).hexdigest()
+    voice_settings = SETTINGS["count" if body.kind == "count" else body.persona]
+    key = hashlib.sha256(f"{voice}|{MODEL}|{FORMAT}|{sorted(voice_settings.items())}|{body.text}".encode()).hexdigest()
     with db.pool.connection() as c:
         row = c.execute("SELECT audio FROM tts_cache WHERE key = %s", (key,)).fetchone()
     if row:
@@ -52,7 +60,7 @@ def tts(body: TtsIn, user_id: str = User) -> Response:
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
             params={"output_format": FORMAT},
             headers={"xi-api-key": settings.elevenlabs_api_key},
-            json={"text": body.text, "model_id": MODEL},
+            json={"text": body.text, "model_id": MODEL, "voice_settings": voice_settings},
             timeout=20,
         )
         r.raise_for_status()

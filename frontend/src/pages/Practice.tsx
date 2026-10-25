@@ -7,7 +7,7 @@ import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
 import { MistakeDetector, THRESHOLDS, describe, holding, howTo, type Mistake, type Sensitivity } from '../coach/live'
 import { anchor, drawArrow, drawBodyGhost, drawPose, fitAt } from '../coach/draw'
-import { click, isSpeaking, makeSpeak, speakFallback, stopVoice } from '../coach/voice'
+import { click, isSpeaking, loadCountIn, makeSpeak, playAt, speakFallback, stopVoice } from '../coach/voice'
 import { parseCommand, type Action } from '../coach/commands'
 import QuickLink from '../QuickLink'
 import { styleCue, styleFor } from '../coach/styles'
@@ -131,6 +131,15 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const ghostCanvas = useRef<HTMLCanvasElement>(null)
   const ghost3d = useRef<Ghost3D | null>(null)
   const snapshot = useRef<HTMLCanvasElement>(null)
+  // Count-in words in the coach's voice, loaded up front (and again if the voice changes).
+  const countWords = useRef<AudioBuffer[] | null>(null)
+  useEffect(() => {
+    const audio = (ac.current ??= new AudioContext())
+    countWords.current = null
+    let live = true
+    void loadCountIn(audio, getToken, persona).then((b) => { if (live) countWords.current = b })
+    return () => { live = false }
+  }, [getToken, persona])
 
   // Which 8-counts flow: from this step's first one to the end of the routine (or just this step, on repeat).
   const startIdx = mode === 'routine' ? routine.eight_counts[0]?.idx ?? 0 : step.eight_counts[0]
@@ -261,6 +270,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     if (!all || !all.frames.length) return
     halt()
     const audio = (ac.current ??= new AudioContext())
+    void audio.resume() // created before any click, so browsers start it suspended
     st.music = music
     st.seg = segAt(from)
     st.samples = []
@@ -278,11 +288,13 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const beat = ((all.counts[1] - all.counts[0]) || 0.5) / st.speed
     const countIn = () => {
       const t0 = audio.currentTime + lead
+      const words = countWords.current // "Five! Six! Seven! Eight!" in the coach's voice, if loaded
       ;['5', '6', '7', '8'].forEach((n, k) => {
         if (!music) click(audio, t0 + k * beat, k === 0)
+        if (words) playAt(audio, words[k], t0 + k * beat, beat) // scheduled exactly on the beat
         st.timers.push(window.setTimeout(() => {
           setCountLabel(n)
-          speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
+          if (!words) speakFallback(n, 1.3)
         }, (lead + k * beat) * 1000))
       })
       st.timers.push(window.setTimeout(() => {

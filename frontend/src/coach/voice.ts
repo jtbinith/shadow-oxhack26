@@ -117,3 +117,69 @@ export function click(ac: AudioContext, at: number, accent: boolean) {
   osc.start(at)
   osc.stop(at + 0.1)
 }
+
+// Count-in words in the coach's own voice, decoded into the AudioContext so they can be scheduled
+// exactly on the beat (like the click track), instead of the browser voice's loose timing.
+const COUNT_WORDS = ['Five!', 'Six!', 'Seven!', 'Eight!']
+const countCache = new Map<string, Promise<AudioBuffer[] | null>>()
+
+/** Drop the silence around the word, so the word itself lands on the beat and nothing trails. */
+function trimLead(ac: BaseAudioContext, b: AudioBuffer): AudioBuffer {
+  const d = b.getChannelData(0)
+  let i = 0
+  while (i < d.length && Math.abs(d[i]) < 0.03) i++
+  let j = d.length - 1
+  while (j > i && Math.abs(d[j]) < 0.02) j--
+  i = Math.max(0, i - Math.round(0.01 * b.sampleRate)) // keep 10 ms of attack
+  j = Math.min(d.length, j + Math.round(0.04 * b.sampleRate)) // and a short tail
+  const out = ac.createBuffer(b.numberOfChannels, Math.max(1, j - i), b.sampleRate)
+  for (let c = 0; c < b.numberOfChannels; c++) out.copyToChannel(b.getChannelData(c).subarray(i, j), c)
+  return out
+}
+
+export function loadCountIn(ac: BaseAudioContext, getToken: () => Promise<string | null>, persona: string): Promise<AudioBuffer[] | null> {
+  let p = countCache.get(persona)
+  if (!p) {
+    p = (async () => {
+      try {
+        const token = await getToken()
+        const bufs = await Promise.all(COUNT_WORDS.map(async (text) => {
+          const res = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ text, persona, kind: 'count' }),
+          })
+          if (!res.ok) throw new Error(String(res.status))
+          return trimLead(ac, await ac.decodeAudioData(await res.arrayBuffer()))
+        }))
+        return bufs
+      } catch {
+        countCache.delete(persona) // try again next time
+        return null
+      }
+    })()
+    countCache.set(persona, p)
+  }
+  return p
+}
+
+let lastCount: { src: AudioBufferSourceNode; gain: GainNode } | null = null
+
+/** Play a count word at an exact AudioContext time. `slot` is the time until the next word: a word
+ * longer than that plays a little faster (at most 1.25×), and the previous word fades out as the
+ * next one starts, so they never overlap. */
+export function playAt(ac: AudioContext, buf: AudioBuffer, when: number, slot = Infinity) {
+  const at = Math.max(ac.currentTime, when)
+  if (lastCount) {
+    lastCount.gain.gain.setTargetAtTime(0, Math.max(ac.currentTime, at - 0.02), 0.008)
+    lastCount.src.stop(at + 0.05)
+  }
+  const src = ac.createBufferSource()
+  src.buffer = buf
+  src.playbackRate.value = Math.min(1.25, Math.max(1, buf.duration / (0.92 * slot)))
+  const gain = ac.createGain()
+  src.connect(gain).connect(ac.destination)
+  src.start(at)
+  lastCount = { src, gain }
+  lastSoundAt = performance.now() + (at - ac.currentTime + buf.duration) * 1000
+}
