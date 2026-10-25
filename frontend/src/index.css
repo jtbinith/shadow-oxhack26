@@ -439,3 +439,20 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* The lesson-plan window is a <header>: don't let the generic header row layout apply to it. */
 .tree-head { display: block; }
 .tree-head .tree-actions { justify-content: flex-start; }
+/* Info button + hover panel */
+.infotip { position: relative; display: inline-block; vertical-align: middle; margin-left: 0.4rem; }
+.infotip-btn { width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; background: transparent; color: inherit; font: 800 0.8rem/1 'Baloo 2', system-ui; cursor: help; padding: 0; }
+.infotip-btn:hover, .infotip-btn:focus-visible { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.infotip-panel {
+  position: absolute; z-index: 20; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); width: max-content; max-width: 300px;
+  display: none; flex-direction: column; gap: 0.35rem; text-align: left; font-size: 0.9rem; font-weight: 500; line-height: 1.35;
+  background: var(--paper); color: var(--ink); border: var(--line); box-shadow: 4px 4px 0 var(--edge); padding: 0.6rem 0.8rem;
+}
+.infotip:hover .infotip-panel, .infotip:focus-within .infotip-panel { display: flex; }
+.infotip-panel .legend { display: flex; align-items: center; gap: 0.5rem; }
+.infotip-panel .tier { width: 14px; height: 14px; }
+.cp-key { width: 14px; height: 14px; border: 2px solid var(--ink); transform: rotate(45deg); display: inline-block; }
+.cp-key.done { background: var(--ink); } .cp-key.open { background: var(--cta); } .cp-key.locked { background: #eee; border-color: #aaa; }
+.section-head { display: flex; align-items: center; gap: 0.2rem; margin: 0 0 0.6rem; color: #f2f2f2; }
+.section-head h3 { margin: 0; font-size: 1.25rem; }
+.checkpoints .infotip { margin-left: 0.3rem; }

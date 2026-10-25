@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import QuickLink from '../QuickLink'
+import { MedalsInfo } from '../InfoTip'
 import LoadingScreen from '../brand/LoadingScreen'
 import { phraseName, useApi, type Routine } from '../api'
 
@@ -94,7 +95,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
         <div className="card" data-title="mastery">
           <h3>Move mastery</h3>
           <table>
-            <thead><tr><th>Phrase</th><th>Rating</th><th>Tier</th><th>Reps</th><th>Review</th></tr></thead>
+            <thead><tr><th>Phrase</th><th>Rating</th><th>Tier <MedalsInfo /></th><th>Reps</th><th>Review</th></tr></thead>
             <tbody>
               {s.mastery.map((m) => (
                 <tr key={m.idx}>

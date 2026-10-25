@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@clerk/clerk-react'
 import QuickLink from '../QuickLink'
+import InfoTip, { MedalsInfo } from '../InfoTip'
 import { phraseName, useApi, type Routine } from '../api'
 
 type Progress = { steps: { index: number; best_speed: number | null; unlocked: boolean }[] }
@@ -126,6 +127,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
       </section>
 
       {/* The phrases, each learnt on its own */}
+      <div className="section-head"><h3>Phrases</h3><MedalsInfo /></div>
       <ol className="phrases" aria-label="Phrases">
         {phrases.map(({ s, i }) => {
           const p = progress?.steps[i]
@@ -152,6 +154,13 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
       {checkpoints.length > 0 && (
         <div className="checkpoints">
           <span className="checkpoints-title">Checkpoints</span>
+          <InfoTip label="What are checkpoints?">
+            <b>Checkpoints</b>
+            <span>Join the phrases you've learnt into one run (1–2, then 1–3 …), up to the whole routine.</span>
+            <span className="legend"><span className="cp-key done" /> Passed</span>
+            <span className="legend"><span className="cp-key open" /> Ready to try</span>
+            <span className="legend"><span className="cp-key locked" /> Locked: pass the phrases before it first</span>
+          </InfoTip>
           <ol className="checkpoint-bar">
             {checkpoints.map(({ s, i }, k) => {
               const p = progress?.steps[i]
