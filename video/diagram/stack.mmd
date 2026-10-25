@@ -1,0 +1,29 @@
+flowchart LR
+  subgraph B["BROWSER · React + TS"]
+    direction TB
+    CAM["Webcam"] --> MP["MediaPipe pose + hands<br/>multi-person"]
+    MP --> RID["Re-ID fingerprints<br/>OSNet · Hugging Face<br/>512 numbers / person"]
+    RID --> DET["Mistake detector<br/>every frame"]
+    DET --> UI["3D ghost · crows · fix card<br/>Three.js"]
+    MIC["Mic"] --> STT["Speech-to-text<br/>hands-free commands"]
+  end
+  subgraph S["BACKEND · FastAPI"]
+    direction TB
+    UP["Upload pipeline<br/>beats · audio deleted<br/>pose · counts"]
+    ENG["Learning engine<br/>Elo · reviews · habits"]
+    AG["Coach agents<br/>plan · re-plan · ask"]
+  end
+  GEM["Google Gemini<br/>plans + coaches"]:::sp
+  EL["ElevenLabs<br/>coach voice"]:::sp
+  TD[("Tiger Data<br/>every rep, time series")]:::sp
+  CK["Clerk<br/>login"]:::sp
+  AI[("AIST++<br/>dance dataset")]
+  UI -->|"rep results, never video"| ENG
+  STT --> AG
+  UP --> TD
+  ENG <--> TD
+  AG <--> GEM
+  AG --> EL
+  S --- CK
+  AI -. "scoring tested" .-> ENG
+  classDef sp fill:#2b6cff,stroke:#ffffff,color:#ffffff,stroke-width:3px

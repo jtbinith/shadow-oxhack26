@@ -1,0 +1,50 @@
+[
+ [
+  "intro",
+  "This is Shadow. Learn any dance from any video, with a coach that watches every rep."
+ ],
+ [
+  "problem",
+  "Learning a dance from a video means pausing, rewinding, and guessing."
+ ],
+ [
+  "upload",
+  "Upload a clip. Shadow finds the beat, deletes the audio, tracks the dancer, and cuts the routine into counts."
+ ],
+ [
+  "plan",
+  "Gemini builds your lesson plan. Learn each count, join them up at checkpoints, and earn bronze, silver and gold as you reach full speed."
+ ],
+ [
+  "practice",
+  "Press start and it goes full screen. The coach counts you in on the beat, and a 3D ghost dances with you, lighting your limbs green as you match it."
+ ],
+ [
+  "tracking",
+  "Even in a busy room, it keeps coaching you. Everyone in frame gets a fingerprint: a 512-number embedding from an OSNet model off Hugging Face, running in your browser, plus clothing colour and position. Walk past, swap places, or step out and back, and Shadow still knows who you are."
+ ],
+ [
+  "crows",
+  "Every slip sends a crow. Just a crow. An attempted murder. And three... is a murder! Shadow stops, and shows you exactly what to fix."
+ ],
+ [
+  "carryon",
+  "Match the ghost's pose, and you're straight back in."
+ ],
+ [
+  "voice",
+  "It's hands-free. Ask it to slow down, and it does, then counts you back in, with ElevenLabs giving the coach its voice."
+ ],
+ [
+  "progress",
+  "Every count is a rep, so Shadow tracks your streak, your progress, and the habits that follow you across routines."
+ ],
+ [
+  "tech",
+  "Under the hood, MediaPipe tracks you in the browser, so your video never leaves your device. A FastAPI backend runs the upload pipeline and learning engine, with scoring tested against the AIST++ dance dataset. Gemini plans and coaches, ElevenLabs speaks, Tiger Data stores every rep as time series, and Clerk keeps it yours."
+ ],
+ [
+  "outro",
+  "Shadow. You shadow the dancer. The crows are watching."
+ ]
+]
