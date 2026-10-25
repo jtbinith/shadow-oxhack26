@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApi, type Routine } from '../api'
 import QuickLink from '../QuickLink'
 import Murder from '../brand/Murder'
-import HoppingCrow from '../brand/HoppingCrow'
+import LoadingScreen from '../brand/LoadingScreen'
 import { STYLES } from '../coach/styles'
 
 type Summary = Pick<Routine, 'id' | 'title' | 'status' | 'tempo_bpm' | 'created_at'> & { steps_total?: number; steps_passed?: number }
@@ -95,7 +95,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
 
       <section className="card" data-title="my-routines">
         <h2>Your routines</h2>
-        {routines === null && <p className="loading-crow"><HoppingCrow size={44} /> Loading…</p>}
+        {routines === null && <LoadingScreen compact label="Loading your routines…" />}
         {routines?.length === 0 && <p className="notice">None yet. Upload one above.</p>}
         <ul className="routines">
           {routines?.map((r) => (

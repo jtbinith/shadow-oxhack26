@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/clerk-react'
+import { ClerkLoading, SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/clerk-react'
 import PoseCam from './pose/PoseCam'
 import Home from './pages/Home'
 import Processing from './pages/Processing'
@@ -10,7 +10,7 @@ import MyProgress from './pages/MyProgress'
 import QuickLink from './QuickLink'
 import Crow from './brand/Crow'
 import Murder from './brand/Murder'
-import HoppingCrow from './brand/HoppingCrow'
+import LoadingScreen from './brand/LoadingScreen'
 import { useApi, type Routine } from './api'
 
 // Navigation lives in the browser history, so the browser / phone back button works everywhere.
@@ -60,6 +60,9 @@ export default function App() {
           </nav>
         </SignedIn>
       </header>
+      <ClerkLoading>
+        <LoadingScreen label="Waking the crows…" />
+      </ClerkLoading>
       <SignedOut>
         <section className="hero">
           <Murder count={4} size={56} />
@@ -111,7 +114,7 @@ function RoutineView({ id, screen, go, back }: { id: string; screen: Screen } & 
     }
     // Refetch when coming back to a screen, so newly unlocked steps show.
   }, [api, id, reload, screen.name])
-  if (!routine) return <p className="loading-crow"><HoppingCrow size={44} /> Loading…</p>
+  if (!routine) return <LoadingScreen label="Loading the routine…" />
   if (routine.status !== 'ready')
     return (
       <>

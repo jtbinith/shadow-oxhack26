@@ -12,7 +12,7 @@ import { parseCommand, type Action } from '../coach/commands'
 import QuickLink from '../QuickLink'
 import Crow from '../brand/Crow'
 import Murder from '../brand/Murder'
-import HoppingCrow from '../brand/HoppingCrow'
+import LoadingScreen from '../brand/LoadingScreen'
 import { styleCue, styleFor } from '../coach/styles'
 
 // Practice is one continuous flow: the routine video plays (it is the clock), the ghost moves
@@ -1109,7 +1109,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {note && <p className="notice flow-note">{note}</p>}
 
       {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
-      {phase === 'loading' && <p className="loading-crow"><HoppingCrow size={44} /> Loading the routine…</p>}
+      {phase === 'loading' && <LoadingScreen compact label="Loading the routine…" />}
 
       {phase === 'ready' && (
         <>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import QuickLink from '../QuickLink'
-import HoppingCrow from '../brand/HoppingCrow'
+import LoadingScreen from '../brand/LoadingScreen'
 import { useApi } from '../api'
 
 type MyStats = {
@@ -25,7 +25,7 @@ export default function MyProgress({ back, open }: { back: () => void; open: (id
   useEffect(() => {
     api<MyStats>('/api/me/stats').then(setS).catch(() => setS(null))
   }, [api])
-  if (!s) return <p className="loading-crow"><HoppingCrow size={44} /> Loading…</p>
+  if (!s) return <LoadingScreen label="Loading your progress…" />
   const stepsPassed = s.routines.reduce((a, r) => a + r.steps_passed, 0)
   const stepsTotal = s.routines.reduce((a, r) => a + r.steps_total, 0)
   // Last 30 days, one bar per day (empty days included).

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import QuickLink from '../QuickLink'
-import HoppingCrow from '../brand/HoppingCrow'
+import LoadingScreen from '../brand/LoadingScreen'
 import { phraseName, useApi, type Routine } from '../api'
 
 type Stats = {
@@ -25,7 +25,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
   useEffect(() => {
     api<Stats>(`/api/routines/${routine.id}/stats`).then(setS)
   }, [api, routine.id])
-  if (!s) return <p className="loading-crow"><HoppingCrow size={44} /> Loading…</p>
+  if (!s) return <LoadingScreen label="Loading progress…" />
   const steps = routine.lesson_plan.steps ?? []
   const learnt = s.reps_to_learn.filter((r) => r.learnt).length
   const recent = [...s.recent].reverse()
