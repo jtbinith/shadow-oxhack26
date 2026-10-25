@@ -506,3 +506,9 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 .murder-perch.murder .perch-msg::before { left: -6px; bottom: -9px; width: 18px; height: 13px; }
 .murder-perch.murder .perch-msg::after { left: -1px; bottom: -4px; width: 13px; height: 10px; }
 .perch-msg { margin-bottom: 10px; }
+/* Speech bubble: no outline. White normally; red for "It's a murder!" */
+.perch-msg { border: 0; padding: 0.3rem 0.85rem; }
+.perch-msg::before { background: var(--paper); left: -4px; bottom: -7px; width: 15px; height: 11px; clip-path: polygon(45% 0, 100% 0, 0 100%); }
+.perch-msg::after { display: none; }
+.murder-perch.murder .perch-msg { border: 0; background: var(--halt); color: #fff; }
+.murder-perch.murder .perch-msg::before { background: var(--halt); left: -5px; bottom: -8px; width: 17px; height: 12px; }

@@ -43,7 +43,7 @@ function CrowTest() {
       <div className="controls" style={{ color: '#f2f2f2' }}>
         <label>How close to the threshold <input type="range" min={0} max={1} step={0.01} value={pressure} onChange={(e) => setPressure(Number(e.target.value))} /> {Math.round(pressure * 100)}%</label>
         <button className="go" onClick={() => { setPressure(0); setPlaying(true) }}>Play: a rep going wrong</button>
-        <button onClick={() => { setPlaying(false); setPressure(0) }}>Reset</button>
+        <button onClick={() => { setPlaying(false); setPressure(0); last.current = { n: 0, at: performance.now() }; setCrows(0) }}>Reset</button>
         <span>{crows} crow{crows === 1 ? '' : 's'}</span>
       </div>
     </section>
