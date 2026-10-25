@@ -4,6 +4,7 @@ import durations from './durations.json'
 import { Intro, Problem, Upload, Plan, Practice, Murder, Voice, Progress, Tech, Outro } from './scenes'
 import { FPS } from './theme'
 import { Demo, DEMO_FRAMES } from './Demo'
+import { Thumb } from './Thumb'
 
 const SCENES: [keyof typeof durations, React.FC][] = [
   ['intro', Intro], ['problem', Problem], ['upload', Upload], ['plan', Plan], ['practice', Practice],
@@ -37,6 +38,7 @@ function Pitch() {
 export function Root() {
   return (
     <>
+      <Composition id="Thumb" component={Thumb} durationInFrames={60} fps={FPS} width={1500} height={1000} />
       <Composition id="Demo" component={Demo} durationInFrames={DEMO_FRAMES} fps={FPS} width={1920} height={1080} />
       <Composition id="Pitch" component={Pitch} durationInFrames={SCENES.reduce((a, [k]) => a + len(k), 0)} fps={FPS} width={1920} height={1080} />
     </>
