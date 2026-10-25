@@ -17,6 +17,7 @@ type Stats = {
 const timingWord = (ms: number | null) =>
   ms === null ? '—' : Math.abs(ms) < 60 ? 'on time' : ms > 0 ? (ms > 200 ? 'late' : 'a touch late') : ms < -200 ? 'early' : 'a touch early'
 
+const tier = (s: number) => (s >= 1 ? 'gold' : s >= 0.75 ? 'silver' : s >= 0.5 ? 'bronze' : '—')
 
 export default function Progress({ routine, back, practise }: { routine: Routine; back: () => void; practise: (stepIndex: number) => void }) {
   const api = useApi()
@@ -93,11 +94,11 @@ export default function Progress({ routine, back, practise }: { routine: Routine
         <div className="card" data-title="mastery">
           <h3>Move mastery</h3>
           <table>
-            <thead><tr><th>Phrase</th><th>Rating</th><th>Passed at</th><th>Reps</th><th>Review</th></tr></thead>
+            <thead><tr><th>Phrase</th><th>Rating</th><th>Tier</th><th>Reps</th><th>Review</th></tr></thead>
             <tbody>
               {s.mastery.map((m) => (
                 <tr key={m.idx}>
-                  <td>{m.idx + 1}</td><td>{m.rating}</td><td>{m.best_speed >= 0.5 ? `${m.best_speed}×` : '—'}</td><td>{m.reps}</td>
+                  <td>{m.idx + 1}</td><td>{m.rating}</td><td className={tier(m.best_speed)}>{tier(m.best_speed)}</td><td>{m.reps}</td>
                   <td>{m.due_at ? (new Date(m.due_at) < new Date() ? 'due now' : new Date(m.due_at).toLocaleDateString()) : '—'}</td>
                 </tr>
               ))}

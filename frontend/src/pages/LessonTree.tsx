@@ -5,6 +5,12 @@ import { phraseName, useApi, type Routine } from '../api'
 
 type Progress = { steps: { index: number; best_speed: number | null; unlocked: boolean }[] }
 
+const TIERS = [
+  { speed: 0.5, name: 'bronze' },
+  { speed: 0.75, name: 'silver' },
+  { speed: 1, name: 'gold' },
+]
+
 // A still from the routine video for one phrase (needs the auth token, so fetched as a blob).
 function useThumb(routineId: string, idx: number) {
   const { getToken } = useAuth()
@@ -33,6 +39,14 @@ function useThumb(routineId: string, idx: number) {
 function Thumb({ routineId, idx }: { routineId: string; idx: number }) {
   const url = useThumb(routineId, idx)
   return url ? <img className="block-thumb" src={url} alt="" /> : <span className="block-thumb empty" />
+}
+
+function Medals({ best }: { best: number }) {
+  return (
+    <span className="tiers">
+      {TIERS.map((t) => <span key={t.name} className={`tier ${t.name} ${best >= t.speed ? 'earned' : ''}`} title={`${t.name}: pass at ${t.speed}×`} />)}
+    </span>
+  )
 }
 
 export default function LessonTree({ routine, back, practise, flowAll, showProgress, replanned }: {
@@ -125,7 +139,8 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
                 <span className="phrase-label">{phraseName(routine, s.eight_counts[0])}</span>
                 {ec?.name && <span className="phrase-moves">{ec.name}</span>}
                 <span className="phrase-foot">
-                  <span className="notice">{locked ? 'locked' : best > 0 ? `passed ${best}×` : `start ${s.start_speed}×`}</span>
+                  <Medals best={best} />
+                  <span className="notice">{locked ? 'locked' : `${s.start_speed}×`}</span>
                 </span>
               </button>
             </li>
@@ -150,7 +165,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
                   <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Unlocks as you pass the phrases before it' : `Practise checkpoint ${name}`}>
                     <span className="cp-node">{whole ? '★' : ''}</span>
                     <span className="cp-label">{name}</span>
-                    {best > 0 && <span className="cp-best">{best}×</span>}
+                    {best > 0 && <Medals best={best} />}
                   </button>
                 </li>
               )
