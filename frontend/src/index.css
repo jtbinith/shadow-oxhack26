@@ -493,3 +493,16 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 .murder-perch.murder .perch-msg::before { border-width: 9px 14px 9px 0; left: -15px; }
 @keyframes bubble-in { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes bubble-shake { 0%, 100% { rotate: 0deg; } 30% { rotate: -3deg; } 70% { rotate: 3deg; } }
+/* Speech-bubble tail: a pointed wedge from the bubble's bottom-left, angled down-left (~45°) at the crows */
+.perch-msg::before, .perch-msg::after { top: auto; border: 0; }
+.perch-msg::before { left: -9px; bottom: -11px; width: 26px; height: 18px; background: var(--ink); clip-path: polygon(45% 0, 100% 0, 0 100%); }
+.perch-msg::after { left: -3px; bottom: -6px; width: 21px; height: 14px; background: var(--paper); clip-path: polygon(48% 0, 100% 0, 0 100%); top: auto; }
+.murder-perch.murder .perch-msg::before { left: -11px; bottom: -14px; width: 30px; height: 21px; border: 0; }
+.murder-perch.murder .perch-msg::after { left: -4px; bottom: -8px; width: 24px; height: 16px; }
+.perch-msg { margin-bottom: 14px; align-self: flex-end; }
+/* Shorter tail */
+.perch-msg::before { left: -5px; bottom: -8px; width: 16px; height: 12px; }
+.perch-msg::after { left: -1px; bottom: -4px; width: 12px; height: 9px; }
+.murder-perch.murder .perch-msg::before { left: -6px; bottom: -9px; width: 18px; height: 13px; }
+.murder-perch.murder .perch-msg::after { left: -1px; bottom: -4px; width: 13px; height: 10px; }
+.perch-msg { margin-bottom: 10px; }
