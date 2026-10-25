@@ -890,24 +890,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         </button>
       </header>
       <div className="stage-row">
-        <div className="stage">
-          <PoseCam onFrame={onFrame} overlay={overlay} />
-          <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
-          {countLabel && <div className="countin">{countLabel}</div>}
-          {phase === 'flowing' && <div className="recording">Flowing · 8-count {segNo(calling?.seg ?? S.current.seg)}</div>}
-          {phase === 'paused' && <div className="recording paused">Paused</div>}
-          {phase === 'flowing' && calling && (
-            <div className="caller">
-              <b>{calling.count}</b> {calling.name}
-            </div>
-          )}
-        </div>
-        <div className="refpanel">
-          {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <p className="notice">Loading the routine video…</p>}
-          <RunProgress now={() => (S.current.end ? Math.max(0, Math.min(1, (videoUrl && video.current ? video.current.currentTime - S.current.secStart : S.current.perf.base) / S.current.end)) : 0)}
-            marks={S.current.segs.map((x) => (S.current.end ? x.off / S.current.end : 0))} />
-          <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
-              {phase !== 'loading' && (
+        <aside className="askpanel">
+          {phase !== 'loading' && (
             <div className="ask">
               <form onSubmit={(e) => { e.preventDefault(); void askCoach(question) }}>
                 <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
@@ -939,6 +923,24 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
               )}
             </div>
           )}
+        </aside>
+        <div className="stage">
+          <PoseCam onFrame={onFrame} overlay={overlay} />
+          <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
+          {countLabel && <div className="countin">{countLabel}</div>}
+          {phase === 'flowing' && <div className="recording">Flowing · 8-count {segNo(calling?.seg ?? S.current.seg)}</div>}
+          {phase === 'paused' && <div className="recording paused">Paused</div>}
+          {phase === 'flowing' && calling && (
+            <div className="caller">
+              <b>{calling.count}</b> {calling.name}
+            </div>
+          )}
+        </div>
+        <div className="refpanel">
+          {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <p className="notice">Loading the routine video…</p>}
+          <RunProgress now={() => (S.current.end ? Math.max(0, Math.min(1, (videoUrl && video.current ? video.current.currentTime - S.current.secStart : S.current.perf.base) / S.current.end)) : 0)}
+            marks={S.current.segs.map((x) => (S.current.end ? x.off / S.current.end : 0))} />
+          <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
         </div>
       </div>
 
