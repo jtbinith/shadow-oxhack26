@@ -2,12 +2,13 @@
 // One drawing, a few poses: stand, caw (beak open), flap (a little jump), peck (leaning in), hop. No wings.
 export type CrowPose = 'stand' | 'caw' | 'flap' | 'peck' | 'hop'
 
-export default function Crow({ pose = 'stand', size = 48, flip = false, className = '', title }: {
+export default function Crow({ pose = 'stand', size = 48, flip = false, className = '', title, inverse = false }: {
   pose?: CrowPose
   size?: number
   flip?: boolean
   className?: string
   title?: string
+  inverse?: boolean // white crow for dark backgrounds, with a solid black eye
 }) {
   const tilt = pose === 'peck' ? 22 : pose === 'hop' ? -10 : 0
   return (
@@ -44,8 +45,8 @@ export default function Crow({ pose = 'stand', size = 48, flip = false, classNam
         </g>
       </g>
       {/* the eye: a white ring with a dark centre */}
-      <circle cx="58" cy="32" r="9.5" fill="#fff" />
-      <circle cx="59" cy="32.5" r="6.4" fill="#111" />
+      <circle cx="58" cy="32" r="9.5" fill={inverse ? '#111' : '#fff'} />
+      {!inverse && <circle cx="59" cy="32.5" r="6.4" fill="#111" />}
     </svg>
   )
 }

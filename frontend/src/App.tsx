@@ -9,7 +9,6 @@ import ProgressPage from './pages/Progress'
 import MyProgress from './pages/MyProgress'
 import QuickLink from './QuickLink'
 import Crow from './brand/Crow'
-import Murder from './brand/Murder'
 import LoadingScreen from './brand/LoadingScreen'
 import { useApi, type Routine } from './api'
 
@@ -49,7 +48,7 @@ export default function App() {
     <main>
       <header>
         <h1 className="logo" onClick={() => go(home)}>
-          <Crow size={46} pose="caw" title="Shadow" />
+          <span className="logo-mark"><Crow size={38} pose="caw" inverse title="Shadow" /></span>
           Shadow
         </h1>
         <SignedIn>
@@ -65,7 +64,6 @@ export default function App() {
       </ClerkLoading>
       <SignedOut>
         <section className="hero">
-          <Murder count={4} size={56} />
           <h1>Hello.<br />Learn any dance.</h1>
           <p>From any video, with a coach that adapts to every rep.</p>
           <SignInButton mode="modal" />

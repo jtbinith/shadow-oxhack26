@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApi, type Routine } from '../api'
 import QuickLink from '../QuickLink'
-import Murder from '../brand/Murder'
 import LoadingScreen from '../brand/LoadingScreen'
 import { STYLES } from '../coach/styles'
 
@@ -51,7 +50,6 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
   return (
     <>
     <section className="intro">
-      <Murder count={4} size={52} />
       <h1>Hello.<br />Learn any dance.</h1>
       <p>Upload a dance video. Shadow cuts it into counts, builds you a lesson path, and coaches you live through your camera.</p>
     </section>
