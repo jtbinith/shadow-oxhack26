@@ -68,7 +68,7 @@ export default function App() {
           <DancingCrows />
           <h1>Hello.<br />Learn any dance.</h1>
           <p>From any video, with a coach that adapts to every rep.</p>
-          <p className="lore"><mark>You shadow the dancer, move for move. The crows are watching too: slip up and they gather.</mark></p>
+          <p className="lore"><mark>You shadow the dancer, move for move.<br />The crows are watching too: slip up and they gather.</mark></p>
           <SignInButton mode="modal" />
         </section>
       </SignedOut>

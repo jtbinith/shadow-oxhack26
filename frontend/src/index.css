@@ -521,11 +521,11 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* The little brand note under the hero text: shadow, crows, murder */
 .intro p.lore, .hero p.lore { font-size: 0.95rem; font-style: italic; color: #555; margin-top: 0.7rem; max-width: 52ch; }
 /* The brand note sits in a blue-bordered box with a faint blue fill */
-.intro p.lore, .hero p.lore { display: block; width: fit-content; font-style: italic; color: var(--ink); background: rgba(43, 108, 255, 0.1); border: 2px solid var(--cta); border-radius: 10px; padding: 0.5rem 0.8rem; margin: 0.9rem 0 1.4rem; max-width: 32ch; text-wrap: balance; }
+.intro p.lore, .hero p.lore { display: block; width: fit-content; font-style: italic; color: var(--ink); background: rgba(43, 108, 255, 0.1); border: 2px solid var(--cta); border-radius: 10px; padding: 0.5rem 0.8rem; margin: 0.9rem 0 1.4rem; max-width: none; }
 .lore mark { background: none; color: inherit; padding: 0; }
 /* Three dancing crows in the empty top-right of the hero */
 .intro, .hero { position: relative; }
-.dancing-crows { position: absolute; bottom: 1.4rem; right: 3.6rem; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }
+.dancing-crows { position: absolute; bottom: 0.9rem; right: 3.2rem; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }
 .dancer { display: inline-block; }
 /* Only the crow sways; its shadow stays flat on the ground */
 .dancer .hop-frame { transform-origin: 50% 100%; }
@@ -539,5 +539,5 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 @media (prefers-reduced-motion: reduce) { .dancer, .dancing-crows .hop-body, .dancing-crows .hop-frame, .dancing-crows .hop-shadow { animation: none !important; } }
 /* Home (wide box): crows centred in the empty right half, note on one or two lines */
 .intro .dancing-crows { bottom: auto; top: 60%; right: 14%; transform: translateY(-50%); gap: 1rem; }
-.intro p.lore { max-width: 60ch; }
+
 @media (max-width: 1100px) { .intro .dancing-crows { display: none; } }
