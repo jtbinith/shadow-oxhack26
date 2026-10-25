@@ -960,8 +960,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
               <form onSubmit={(e) => { e.preventDefault(); void askCoach(question) }}>
                 <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
                 {Recognition && (
-                  <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title="Ask out loud">
-                    {listening ? 'Listening…' : 'Speak'}
+                  <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title={listening ? "Stop listening" : "Ask out loud"} aria-label={listening ? "Stop listening" : "Ask out loud"}>
+                    <MicIcon />{listening && <span className="mic-label">Listening…</span>}
                   </button>
                 )}
                 <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
@@ -1150,4 +1150,12 @@ const PauseIcon = () => (
 )
 const StopIcon = () => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" /></svg>
+)
+
+const MicIcon = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+    <path d="M12 17.5V21M8.5 21h7" />
+  </svg>
 )
