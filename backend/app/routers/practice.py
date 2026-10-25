@@ -156,8 +156,7 @@ def stats(routine_id: str, user_id: str = User) -> dict:
     while day in practised:
         streak += 1
         day -= dt.timedelta(days=1)
-    xp = int((totals["reps"] or 0) * 10 + (totals["passes"] or 0) * 25)
-    return {"totals": totals, "daily": daily, "recent": recent, "reps_to_learn": to_learn, "habits": habits, "mastery": mastery, "streak": streak, "xp": xp}
+    return {"totals": totals, "daily": daily, "recent": recent, "reps_to_learn": to_learn, "habits": habits, "mastery": mastery, "streak": streak}
 
 
 class ReplanIn(BaseModel):

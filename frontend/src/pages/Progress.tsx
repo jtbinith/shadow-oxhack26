@@ -10,8 +10,11 @@ type Stats = {
   habits: { label: string; times: number; share: number; body_part: string | null }[]
   mastery: { idx: number; rating: number; reps: number; passes: number; best_speed: number; due_at: string | null }[]
   streak: number
-  xp: number
 }
+
+// Timing in words (no milliseconds): positive bias = late.
+const timingWord = (ms: number | null) =>
+  ms === null ? '—' : Math.abs(ms) < 60 ? 'on time' : ms > 0 ? (ms > 200 ? 'late' : 'a touch late') : ms < -200 ? 'early' : 'a touch early'
 
 const tier = (s: number) => (s >= 1 ? 'gold' : s >= 0.75 ? 'silver' : s >= 0.5 ? 'bronze' : '—')
 
@@ -37,11 +40,25 @@ export default function Progress({ routine, back, practise }: { routine: Routine
       </header>
       <div className="tiles">
         <div className="tile"><b>{s.streak}</b><span>day streak</span></div>
-        <div className="tile"><b>{s.xp}</b><span>XP</span></div>
         <div className="tile"><b>{learnt}/{steps.length}</b><span>steps learnt</span></div>
         <div className="tile"><b>{s.totals.reps}</b><span>reps · {s.totals.minutes ?? 0} min</span></div>
         <div className="tile"><b>{s.totals.best_score ?? '—'}</b><span>best score</span></div>
-        <div className="tile"><b>{s.totals.timing_bias_ms === null ? '—' : `${Math.abs(s.totals.timing_bias_ms)} ms`}</b><span>{(s.totals.timing_bias_ms ?? 0) > 0 ? 'late on average' : 'early on average'}</span></div>
+        <div className="tile"><b>{timingWord(s.totals.timing_bias_ms)}</b><span>timing on average</span></div>
+      </div>
+
+      <div className="card habits-card" data-title="habits">
+        <h3>Your habits</h3>
+        <p className="notice">Found by AI clustering: your missed reps, grouped by what went wrong (which limb, which way, which counts, timing).</p>
+        <ul className="habit-list">
+          {s.habits.length === 0 && <li className="notice">Not enough missed reps yet to spot a pattern (needs 4).</li>}
+          {s.habits.map((h, i) => (
+            <li key={i}>
+              <span className="habit-label">{h.label}</span>
+              <span className="pbar"><span style={{ width: `${Math.round(h.share * 100)}%` }} /></span>
+              <span className="notice">{Math.round(h.share * 100)}% of missed reps ({h.times})</span>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {(() => {
@@ -65,11 +82,12 @@ export default function Progress({ routine, back, practise }: { routine: Routine
       <div className="card" data-title="history">
         <h3>Score, rep by rep</h3>
         <div className="spark">
+          <i className="goal" style={{ bottom: '80%' }}><span>pass 80</span></i>
           {recent.map((r, i) => (
             <span key={i} className={`bar ${r.passed ? 'pass' : ''}`} style={{ height: `${Math.max(4, r.similarity)}%` }} title={`${label(r.step_index)} · ${r.speed}× · ${r.drill}: ${Math.round(r.similarity)}`} />
           ))}
         </div>
-        <span className="notice">Last {recent.length} reps · green = passed (80+)</span>
+        <span className="notice">Last {recent.length} reps · black = passed · dashed line = pass mark (80)</span>
       </div>
 
       <div className="grid2">
@@ -87,15 +105,10 @@ export default function Progress({ routine, back, practise }: { routine: Routine
             </tbody>
           </table>
         </div>
-        <div className="card" data-title="habits">
+        <div className="card" data-title="reps-to-learn">
           <h3>Reps to learn</h3>
           <ul className="plain">
             {s.reps_to_learn.map((r) => <li key={r.step_index}>{label(r.step_index)}: {r.reps} reps{r.learnt ? '' : ' (not passed yet)'}</li>)}
-          </ul>
-          <h3>Your habits (clustered from your reps)</h3>
-          <ul className="plain">
-            {s.habits.length === 0 && <li className="notice">Not enough missed reps yet to spot a pattern (needs 4).</li>}
-            {s.habits.map((h, i) => <li key={i}><b>{h.label}</b> — {Math.round(h.share * 100)}% of your missed reps ({h.times})</li>)}
           </ul>
         </div>
       </div>

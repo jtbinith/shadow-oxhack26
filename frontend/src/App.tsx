@@ -6,12 +6,13 @@ import Processing from './pages/Processing'
 import LessonTree from './pages/LessonTree'
 import Practice from './pages/Practice'
 import ProgressPage from './pages/Progress'
+import MyProgress from './pages/MyProgress'
 import QuickLink from './QuickLink'
 import { useApi, type Routine } from './api'
 
 // Navigation lives in the browser history, so the browser / phone back button works everywhere.
 type Screen = { name: 'tree' } | { name: 'progress' } | { name: 'practice'; step: number; whole: boolean }
-type View = { name: 'home' } | { name: 'camera' } | { name: 'routine'; id: string; screen: Screen }
+type View = { name: 'home' } | { name: 'camera' } | { name: 'me' } | { name: 'routine'; id: string; screen: Screen }
 type Nav = { go: (v: View, replace?: boolean) => void; back: (fallback: View) => void }
 
 function useNav(): { view: View } & Nav {
@@ -48,7 +49,11 @@ export default function App() {
           Shadow
         </h1>
         <SignedIn>
-          <UserButton />
+          <nav className="topnav">
+            <button className={view.name === 'home' ? 'on' : ''} onClick={() => go(home)}>My routines</button>
+            <button className={view.name === 'me' ? 'on' : ''} onClick={() => go({ name: 'me' })}>My progress</button>
+            <UserButton />
+          </nav>
         </SignedIn>
       </header>
       <SignedOut>
@@ -60,6 +65,7 @@ export default function App() {
       </SignedOut>
       <SignedIn>
         {view.name === 'home' && <Home open={(id) => go({ name: 'routine', id, screen: { name: 'tree' } })} tryCamera={() => go({ name: 'camera' })} />}
+        {view.name === 'me' && <MyProgress back={() => back(home)} open={(id) => go({ name: 'routine', id, screen: { name: 'tree' } })} />}
         {view.name === 'routine' && <RoutineView id={view.id} screen={view.screen} go={go} back={back} />}
         {view.name === 'camera' && (
           <section>

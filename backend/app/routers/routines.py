@@ -1,4 +1,5 @@
 import io
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -145,3 +146,77 @@ def get_video(routine_id: str, user_id: str = User) -> Response:
 def delete_routine(routine_id: str, user_id: str = User) -> None:
     with _pool().connection() as c:
         c.execute("DELETE FROM routines WHERE id = %s AND user_id = %s", (routine_id, user_id))
+
+
+_thumbs: dict[tuple[str, int], bytes] = {}
+
+
+@router.get("/routines/{routine_id}/eight-counts/{idx}/thumb")
+def get_thumb(routine_id: str, idx: int, user_id: str = User) -> Response:
+    """A still from the routine video near the start of one phrase (for the lesson blocks)."""
+    key = (routine_id, idx)
+    if key not in _thumbs:
+        with _pool().connection() as c:
+            row = c.execute(
+                """SELECT r.video, e.start_s, e.end_s FROM eight_counts e JOIN routines r ON r.id = e.routine_id
+                   WHERE e.routine_id = %s AND e.idx = %s AND r.user_id = %s""", (routine_id, idx, user_id)).fetchone()
+        if not row or row[0] is None:
+            raise HTTPException(404, "No thumbnail")
+        at = row[1] + 0.3 * (row[2] - row[1])
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as f:
+            f.write(bytes(row[0]))
+            f.flush()
+            out = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{at:.2f}", "-i", f.name, "-frames:v", "1",
+                                  "-vf", "scale=320:-2", "-f", "image2", "-c:v", "mjpeg", "pipe:1"], capture_output=True, timeout=20)
+        if out.returncode or not out.stdout:
+            raise HTTPException(404, "No thumbnail")
+        if len(_thumbs) > 500:
+            _thumbs.clear()
+        _thumbs[key] = out.stdout
+    return Response(_thumbs[key], media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+def streak_days(c, user_id: str) -> int:
+    """Consecutive days with practice, counting back from today (or yesterday)."""
+    import datetime as dt
+    days = c.execute("SELECT DISTINCT time_bucket('1 day', time) AS d FROM rep_scores WHERE user_id=%s", (user_id,)).fetchall()
+    practised = {(d["d"] if isinstance(d, dict) else d[0]).date() for d in days}
+    streak, day = 0, dt.datetime.now(dt.timezone.utc).date()
+    if day not in practised:
+        day -= dt.timedelta(days=1)
+    while day in practised:
+        streak += 1
+        day -= dt.timedelta(days=1)
+    return streak
+
+
+@router.get("/me/stats")
+def my_stats(user_id: str = User) -> dict:
+    """Progress across all routines: totals, streak, practice per day, each routine, top habits."""
+    with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
+        totals = c.execute(
+            """SELECT count(*) AS reps, count(*) FILTER (WHERE passed) AS passes, round(avg(similarity)) AS avg_score,
+                      count(DISTINCT time_bucket('1 day', time)) AS days_practised,
+                      count(DISTINCT session_id) AS sessions
+               FROM rep_scores WHERE user_id = %s""", (user_id,)).fetchone()
+        # Minutes: sum of each session's span (first to last rep), so idle gaps between sessions don't count.
+        minutes = c.execute(
+            """SELECT round(coalesce(sum(extract(epoch FROM t1 - t0)), 0) / 60) AS m FROM
+               (SELECT min(time) AS t0, max(time) AS t1 FROM rep_scores WHERE user_id = %s GROUP BY session_id) s""", (user_id,)).fetchone()["m"]
+        daily = c.execute(
+            """SELECT time_bucket('1 day', time) AS day, count(*) AS reps, round(avg(similarity)) AS avg_score
+               FROM rep_scores WHERE user_id = %s AND time > now() - interval '30 days' GROUP BY day ORDER BY day""", (user_id,)).fetchall()
+        routines = c.execute(
+            """SELECT r.id, r.title, r.status, coalesce(jsonb_array_length(r.lesson_plan->'steps'), 0) AS steps_total,
+                      (SELECT count(DISTINCT s.step_index) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id AND s.passed) AS steps_passed,
+                      (SELECT count(*) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id) AS reps,
+                      (SELECT round(avg(similarity)) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id) AS avg_score,
+                      (SELECT max(speed) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id AND s.passed) AS best_speed,
+                      (SELECT max(time) FROM rep_scores s WHERE s.routine_id = r.id AND s.user_id = r.user_id) AS last_practised
+               FROM routines r WHERE r.user_id = %s ORDER BY last_practised DESC NULLS LAST, r.created_at DESC""", (user_id,)).fetchall()
+        habits = c.execute(
+            """SELECT h.label, h.count AS times, h.share, r.title AS routine FROM error_clusters h JOIN routines r ON r.id = h.routine_id
+               WHERE h.user_id = %s ORDER BY h.count DESC LIMIT 5""", (user_id,)).fetchall()
+        streak = streak_days(c, user_id)
+    return {"totals": {**totals, "minutes": minutes}, "streak": streak, "daily": daily,
+            "routines": [{**r, "id": str(r["id"])} for r in routines], "habits": habits}
