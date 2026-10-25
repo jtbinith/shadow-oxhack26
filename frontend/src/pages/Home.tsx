@@ -15,18 +15,26 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const input = useRef<HTMLInputElement>(null)
+  // Name: required and unique (ignoring capitals and extra spaces).
+  const name = title.split(/\s+/).filter(Boolean).join(' ')
+  const taken = !!routines?.some((r) => r.title.trim().toLowerCase() === name.toLowerCase())
+  const nameOk = name.length > 0 && !taken
+  const pick = (f: File | null) => {
+    setFile(f)
+    if (f && !title.trim()) setTitle(f.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 80))
+  }
 
   useEffect(() => {
     api<Summary[]>('/api/routines').then(setRoutines).catch(() => setRoutines([]))
   }, [api])
 
   const upload = async () => {
-    if (!file) return
+    if (!file || !nameOk) return
     setBusy(true)
     setError('')
     const form = new FormData()
     form.append('video', file)
-    form.append('title', title || file.name.replace(/\.[^.]+$/, ''))
+    form.append('title', name)
     form.append('style', style)
     form.append('rights', String(rights))
     try {
@@ -54,13 +62,14 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
           onDrop={(e) => {
             e.preventDefault()
             const f = e.dataTransfer.files[0]
-            if (f) setFile(f)
+            if (f) pick(f)
           }}
         >
-          {file ? <strong>{file.name}</strong> : <span>Drop a dance video here, or click to choose (up to 3 min)</span>}
-          <input ref={input} type="file" accept="video/*" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          {file ? <strong>{file.name}</strong> : <span>Drop a dance video here, or click to choose (up to 10 min)</span>}
+          <input ref={input} type="file" accept="video/*" hidden onChange={(e) => pick(e.target.files?.[0] ?? null)} />
         </div>
-        <input className="title" placeholder="Routine name (optional)" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
+        <input className={`title ${taken ? 'invalid' : ''}`} placeholder="Routine name" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} required aria-invalid={taken || !name} />
+        {taken && <p className="error">You already have a routine called “{name}”. Pick another name.</p>}
         <label className="style-pick">
           Style{' '}
           <select value={style} onChange={(e) => setStyle(e.target.value)}>
@@ -75,7 +84,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
           This is my routine, my teacher's, or I'm using it for personal practice. Shadow deletes the audio after processing and keeps a silent copy of the video for your practice preview.
         </label>
         <p className="tips">Best results: one dancer, full body in frame, camera still and front-on, good light.</p>
-        <button className="primary" disabled={!file || !rights || busy} onClick={upload}>
+        <button className="primary" disabled={!file || !nameOk || !rights || busy} title={!name ? 'Give the routine a name' : taken ? 'That name is taken' : undefined} onClick={upload}>
           {busy ? 'Uploading…' : 'Build my course'}
         </button>
         {error && <p className="error">{error}</p>}

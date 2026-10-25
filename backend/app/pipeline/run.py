@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import db
+from ..config import settings
 from ..agent import plan as lesson_plan
 from . import audio, features, media, moves, pose, segment
 
@@ -33,8 +34,8 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
     work = Path(tempfile.mkdtemp(prefix="shadow-"))
     try:
         info = media.probe(upload)
-        if info["duration"] > 180:
-            raise ValueError("Video is longer than 3 minutes")
+        if info["duration"] > settings.max_video_minutes * 60:
+            raise ValueError(f"Video is longer than {settings.max_video_minutes} minutes")
         video, wav = media.split(upload, work)
         upload.unlink(missing_ok=True)
         _stage(routine_id, "converted", duration=round(info["duration"], 1))

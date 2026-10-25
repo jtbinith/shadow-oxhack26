@@ -32,7 +32,7 @@ def me(user_id: str = User) -> dict:
 async def upload_routine(
     background: BackgroundTasks,
     video: UploadFile = File(...),
-    title: str = Form("My routine", max_length=80),
+    title: str = Form("", max_length=80),
     style: str = Form("general", max_length=30),
     rights: bool = Form(...),
     user_id: str = User,
@@ -41,7 +41,13 @@ async def upload_routine(
         raise HTTPException(400, "Please confirm you have the right to use this video")
     if not (video.content_type or "").startswith("video/"):
         raise HTTPException(415, "Please upload a video file")
+    title = " ".join(title.split())
+    if not title:
+        raise HTTPException(400, "Give the routine a name")
     pool = _pool()
+    with pool.connection() as c:
+        if c.execute("SELECT 1 FROM routines WHERE user_id = %s AND lower(title) = lower(%s)", (user_id, title)).fetchone():
+            raise HTTPException(409, f'You already have a routine called "{title}". Pick another name.')
     with pool.connection() as c:
         busy = c.execute("SELECT count(*) FROM routines WHERE user_id = %s AND status = 'processing'", (user_id,)).fetchone()[0]
     if busy:
@@ -64,7 +70,7 @@ async def upload_routine(
     with pool.connection() as c:
         routine_id = c.execute(
             "INSERT INTO routines (user_id, title, style, stages) VALUES (%s, %s, %s, '[{\"stage\": \"received\"}]') RETURNING id",
-            (user_id, title.strip() or "My routine", style if style in STYLES else "general"),
+            (user_id, title, style if style in STYLES else "general"),
         ).fetchone()[0]
     background.add_task(process, str(routine_id), tmp, user_id)
     return {"id": str(routine_id), "status": "processing"}

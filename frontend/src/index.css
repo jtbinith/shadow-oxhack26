@@ -265,3 +265,4 @@ th { border-bottom: var(--line); }
 .quicklink:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--edge); }
 .quicklink.primary { background: var(--ink); color: var(--paper); }
 .practice-head .quicklink.back, .controls .quicklink, .tree-actions .quicklink { margin: 0; }
+.title.invalid { border-color: #b00020; }

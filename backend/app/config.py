@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     auth_test_bypass: bool = False
     # "local" = temp files deleted after processing (Hugging Face); "s3" = Vultr Object Storage.
     storage_backend: str = "local"
-    max_upload_mb: int = 200
+    max_upload_mb: int = 500
+    max_video_minutes: int = 10
     # Daily rationing of free-tier quotas. While it's just us, per-user = whole-app; lower the
     # per-user values in .env once others use the deployed app.
     limit_gemini_per_user: int = 300
