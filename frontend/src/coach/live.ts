@@ -10,10 +10,12 @@ export type Sensitivity = 'relaxed' | 'normal' | 'strict'
 // Degrees of limb-direction error, averaged over the window: one limb this far off, or the
 // limbs on average this far off, stops the flow.
 export const THRESHOLDS: Record<Sensitivity, { bone: number; mean: number }> = {
-  relaxed: { bone: 62, mean: 45 },
-  normal: { bone: 50, mean: 36 },
-  strict: { bone: 40, mean: 28 },
+  relaxed: { bone: 50, mean: 36 },
+  normal: { bone: 40, mean: 28 },
+  strict: { bone: 32, mean: 22 },
 }
+// Matching the frozen target pose while paused: fixed, so a stricter stop setting doesn't make it harder.
+const HOLD = { bone: 22, mean: 25 }
 const LAG_BACK_S = 0.4 // how far behind the routine we still look for a match
 const LAG_FWD_S = 0.15
 const LATE_S = 0.28 // consistently this far behind = "late"
@@ -239,7 +241,8 @@ export function holding(frame: Frame | null, target: Frame, bone: number, mask: 
     n++
   }
   if (n < 3) return false
-  return (bone < 0 || (boneErr !== null && boneErr < 0.45 * th.bone)) && sum / n < 0.7 * th.mean
+  void th // kept for callers; the hold check uses fixed HOLD limits
+  return (bone < 0 || (boneErr !== null && boneErr < HOLD.bone)) && sum / n < HOLD.mean
 }
 
 /** "How do I fix it?" answered instantly from the detected mistake: concrete technique steps

@@ -907,6 +907,38 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <RunProgress now={() => (S.current.end ? Math.max(0, Math.min(1, (videoUrl && video.current ? video.current.currentTime - S.current.secStart : S.current.perf.base) / S.current.end)) : 0)}
             marks={S.current.segs.map((x) => (S.current.end ? x.off / S.current.end : 0))} />
           <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
+              {phase !== 'loading' && (
+            <div className="ask">
+              <form onSubmit={(e) => { e.preventDefault(); void askCoach(question) }}>
+                <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
+                {Recognition && (
+                  <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title="Ask out loud">
+                    {listening ? 'Listening…' : 'Speak'}
+                  </button>
+                )}
+                <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
+              </form>
+              {coachAnswer && (
+                <div className="coach-says">
+                  <p>
+                    {coachAnswer.answer}{' '}
+                    <button className="link" onClick={() => void speak(coachAnswer.instant && pause?.how ? pause.how.spoken : coachAnswer.answer)} title="Hear it again">Hear again</button>
+                  </p>
+                  {coachAnswer.instant && asking && <span className="notice">The coach is adding tips for you…</span>}
+                  {more && (
+                    <p className="more">
+                      <b>More from the coach:</b> {more.answer}{' '}
+                      <button className="link" onClick={() => say(more.answer)} title="Hear it">Hear it</button>
+                    </p>
+                  )}
+                  {coachAnswer.actions.length > 0 && <span className="notice">Doing it: {coachAnswer.actions.map(describeAction).join(' → ')}</span>}
+                  {more && more.actions.length > 0 && (
+                    <button className="primary" onClick={() => void runActions(more.actions, null)}>Do it: {more.actions.map(describeAction).join(' → ')}</button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -964,8 +996,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             <button onClick={() => { halt(); setPhase('paused') }}>← Back to the fix</button>
           )}
           {phase === 'watching' && S.current.demoBack !== 'paused' && <button onClick={stop}>← Back</button>}
-          {phase !== 'watching' && <button onClick={stop}>Stop</button>}
-          {phase === 'flowing' && <button onClick={() => stopFor(null, 'manual')}>Pause</button>}
+          {phase === 'flowing' && <button className="icon" onClick={() => stopFor(null, 'manual')} title="Pause" aria-label="Pause"><PauseIcon /></button>}
+          {phase !== 'watching' && <button className="icon" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>}
         </div>
       )}
 
@@ -990,7 +1022,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
             <button onClick={() => demo(pause.seg, pause.count)}>Show me slowly</button>
             <button onClick={skipAhead}>Skip ahead →</button>
-            <button onClick={stop}>Stop</button>
+            <button className="icon" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>
           </div>
         </div>
       )}
@@ -1014,38 +1046,6 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         </div>
       )}
 
-      {(phase === 'paused' || phase === 'ready' || phase === 'done') && (
-        <div className="ask">
-          <form onSubmit={(e) => { e.preventDefault(); void askCoach(question) }}>
-            <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
-            {Recognition && (
-              <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title="Ask out loud">
-                {listening ? 'Listening…' : 'Speak'}
-              </button>
-            )}
-            <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
-          </form>
-          {coachAnswer && (
-            <div className="coach-says">
-              <p>
-                {coachAnswer.answer}{' '}
-                <button className="link" onClick={() => void speak(coachAnswer.instant && pause?.how ? pause.how.spoken : coachAnswer.answer)} title="Hear it again">Hear again</button>
-              </p>
-              {coachAnswer.instant && asking && <span className="notice">The coach is adding tips for you…</span>}
-              {more && (
-                <p className="more">
-                  <b>More from the coach:</b> {more.answer}{' '}
-                  <button className="link" onClick={() => say(more.answer)} title="Hear it">Hear it</button>
-                </p>
-              )}
-              {coachAnswer.actions.length > 0 && <span className="notice">Doing it: {coachAnswer.actions.map(describeAction).join(' → ')}</span>}
-              {more && more.actions.length > 0 && (
-                <button className="primary" onClick={() => void runActions(more.actions, null)}>Do it: {more.actions.map(describeAction).join(' → ')}</button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </section>
   )
 }
@@ -1069,3 +1069,10 @@ function RunProgress({ now, marks }: { now: () => number; marks: number[] }) {
     </span>
   )
 }
+
+const PauseIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" /><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" /></svg>
+)
+const StopIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" /></svg>
+)
