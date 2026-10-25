@@ -2,10 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
 import { useAuth } from '@clerk/clerk-react'
 import { useApi, type Routine, type Step } from '../api'
-import { BONES, angle, boneDirs, boneMask, normaliseFrame, refFrame, scoreRep, type Drill, type Frame, type RefData, type RepScore, type UserSample } from '../coach/score'
+import { BONES, angle, boneDirs, normaliseFrame, refFrame, scoreRep, type Frame, type RefData, type UserSample } from '../coach/score'
 import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
+import { MistakeDetector, THRESHOLDS, describe, holding, type Mistake, type Sensitivity } from '../coach/live'
+import { anchor, drawArrow, drawBodyGhost, drawPose } from '../coach/draw'
+import { click, makeSpeak, speakFallback } from '../coach/voice'
 import { styleCue, styleFor } from '../coach/styles'
+
+// Practice is one continuous flow: the routine video plays (it is the clock), the ghost moves
+// with it, and the learner dances straight through the 8-counts. When a noticeable mistake is
+// sustained, everything pauses on it: what's wrong (body part, which way, timing, speed), the
+// target pose to match, a chance to ask how — then that 8-count again, and on past it.
 
 // The parts of the Web Speech API we use (not in TypeScript's DOM types everywhere).
 type SpeechRecognitionLike = {
@@ -18,160 +26,16 @@ type SpeechRecognitionLike = {
   start: () => void
   stop: () => void
 }
-
-type Phase = 'loading' | 'ready' | 'countin' | 'dancing' | 'feedback'
-type Next = { action: 'practise' | 'next_step'; speed?: number; drill?: Drill; reason: string }
+type Phase = 'loading' | 'ready' | 'watching' | 'countin' | 'flowing' | 'paused' | 'done'
 type Reference = { fps: number; start: number; end: number; counts: number[]; points: number[][][]; world?: number[][][] }
+// One 8-count inside the flowing section.
+type Seg = { idx: number; off: number; dur: number; ref: RefData; names: string[] }
+type Pause = { m: Mistake | null; seg: number; count: number; headline: string; fixes: string[]; lost?: boolean }
 
-const DRILL_LABEL: Record<Drill, string> = { full: 'Full move', freeze: 'Key-pose freezes', arms: 'Arms only', legs: 'Legs only', half: 'Toughest half' }
-
-// Mid-rep rescue: if the learner is far off the routine for this long, stop and restart.
+const SPEEDS = [0.25, 0.5, 0.75, 1]
 const LOST_AFTER_S = 2.5
-const LOST_COST = 0.55
-
-// The coach's voice: ElevenLabs audio (cached twice — server-side per line, and as object
-// URLs here), falling back to the browser's built-in speech when it's unavailable.
-const clipCache = new Map<string, string>()
-
-function speakFallback(text: string, rate = 1.05) {
-  if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.rate = rate
-  window.speechSynthesis.speak(u)
-}
-
-function makeSpeak(getToken: () => Promise<string | null>, persona: () => string) {
-  return async (text: string, rate = 1.05) => {
-    const key = `${persona()}|${text}`
-    try {
-      let url = clipCache.get(key)
-      if (!url) {
-        const token = await getToken()
-        const res = await fetch('/api/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ text, persona: persona() }),
-        })
-        if (!res.ok) throw new Error(String(res.status))
-        url = URL.createObjectURL(await res.blob())
-        clipCache.set(key, url)
-      }
-      await new Audio(url).play()
-    } catch {
-      speakFallback(text, rate)
-    }
-  }
-}
-
-function click(ac: AudioContext, at: number, accent: boolean) {
-  const osc = ac.createOscillator()
-  const gain = ac.createGain()
-  osc.frequency.value = accent ? 1320 : 880
-  gain.gain.setValueAtTime(accent ? 0.5 : 0.3, at)
-  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.08)
-  osc.connect(gain).connect(ac.destination)
-  osc.start(at)
-  osc.stop(at + 0.1)
-}
-
-// Where to draw a reference pose: anchored at the learner's mid-hip, scaled to their torso.
-function anchor(person: Person | undefined, w: number, h: number) {
-  const b = person?.body
-  const seen = (i: number) => b && (b[i]?.visibility ?? 0) > 0
-  if (!b || ![11, 12, 23, 24].every(seen)) return { x: w / 2, y: h * 0.55, torso: h * 0.22 }
-  const hx = ((b[23].x + b[24].x) / 2) * w
-  const hy = ((b[23].y + b[24].y) / 2) * h
-  const sx = ((b[11].x + b[12].x) / 2) * w
-  const sy = ((b[11].y + b[12].y) / 2) * h
-  return { x: hx, y: hy, torso: Math.hypot(sx - hx, sy - hy) }
-}
-
-function drawPose(ctx: CanvasRenderingContext2D, f: Frame, at: { x: number; y: number; torso: number }, colours: (string | null)[], width: number) {
-  ctx.lineCap = 'round'
-  BONES.forEach(([a, b], i) => {
-    const pa = f[a]
-    const pb = f[b]
-    const c = colours[i]
-    if (!pa || !pb || !c) return
-    ctx.strokeStyle = c
-    ctx.lineWidth = width
-    ctx.beginPath()
-    ctx.moveTo(at.x + pa[0] * at.torso, at.y + pa[1] * at.torso)
-    ctx.lineTo(at.x + pb[0] * at.torso, at.y + pb[1] * at.torso)
-    ctx.stroke()
-  })
-}
-
-// A solid, translucent body (torso, head, tapered limbs) — reads as a dancer, not a stick figure.
-function drawBodyGhost(ctx: CanvasRenderingContext2D, f: Frame, at: { x: number; y: number; torso: number }, colours: (string | null)[]) {
-  const P = (p: [number, number]) => [at.x + p[0] * at.torso, at.y + p[1] * at.torso] as const
-  ctx.save()
-  // torso
-  const [ls, rs, rh, lh] = [f[11], f[12], f[24], f[23]]
-  if (ls && rs && rh && lh) {
-    ctx.beginPath()
-    const pts = [ls, rs, rh, lh].map(P)
-    ctx.moveTo(pts[0][0], pts[0][1])
-    for (const [x, y] of pts.slice(1)) ctx.lineTo(x, y)
-    ctx.closePath()
-    ctx.fillStyle = 'rgba(127,216,255,0.28)'
-    ctx.strokeStyle = 'rgba(127,216,255,0.8)'
-    ctx.lineWidth = at.torso * 0.05
-    ctx.lineJoin = 'round'
-    ctx.fill()
-    ctx.stroke()
-    // head
-    if (f[0]) {
-      const mid = P([(ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2])
-      const nose = P(f[0])
-      const r = Math.max(8, Math.hypot(nose[0] - mid[0], nose[1] - mid[1]) * 0.55)
-      ctx.beginPath()
-      ctx.arc(nose[0], nose[1] + r * 0.35, r, 0, 2 * Math.PI)
-      ctx.fill()
-      ctx.stroke()
-    }
-  }
-  // limbs: thick near the body, slimmer at the tip
-  BONES.forEach(([a, b], i) => {
-    if (i >= 8) return
-    const pa = f[a]
-    const pb = f[b]
-    const c = colours[i]
-    if (!pa || !pb || !c) return
-    const [x1, y1] = P(pa)
-    const [x2, y2] = P(pb)
-    ctx.strokeStyle = c
-    ctx.lineCap = 'round'
-    ctx.lineWidth = at.torso * (i % 2 === 0 ? 0.17 : 0.12) // upper limb thicker than fore-limb
-    ctx.beginPath()
-    ctx.moveTo(x1, y1)
-    ctx.lineTo(x2, y2)
-    ctx.stroke()
-  })
-  ctx.restore()
-}
-
-function drawArrow(ctx: CanvasRenderingContext2D, fx: number, fy: number, tx: number, ty: number) {
-  const head = 14
-  const ang = Math.atan2(ty - fy, tx - fx)
-  ctx.strokeStyle = '#ffffff'
-  ctx.fillStyle = '#ffffff'
-  ctx.lineWidth = 5
-  ctx.lineCap = 'round'
-  ctx.setLineDash([2, 8])
-  ctx.beginPath()
-  ctx.moveTo(fx, fy)
-  ctx.lineTo(tx, ty)
-  ctx.stroke()
-  ctx.setLineDash([])
-  ctx.beginPath()
-  ctx.moveTo(tx, ty)
-  ctx.lineTo(tx - head * Math.cos(ang - 0.45), ty - head * Math.sin(ang - 0.45))
-  ctx.lineTo(tx - head * Math.cos(ang + 0.45), ty - head * Math.sin(ang + 0.45))
-  ctx.closePath()
-  ctx.fill()
-}
+const HOLD_S = 0.8
+const ALL_BONES = Array(BONES.length).fill(true)
 
 export default function Practice({ routine, stepIndex, step, onExit, onNextStep }: {
   routine: Routine
@@ -181,52 +45,73 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
   onNextStep: () => void
 }) {
   const api = useApi()
+  const { getToken } = useAuth()
+  const style = styleFor(routine.style)
   const [phase, setPhase] = useState<Phase>('loading')
   const [speed, setSpeed] = useState(step.start_speed)
-  const [drill, setDrill] = useState<Drill>('full')
-  const [result, setResult] = useState<RepScore | null>(null)
-  const [next, setNext] = useState<Next | null>(null)
-  const [habit, setHabit] = useState<string | null>(null)
+  const [sensitivity, setSensitivity] = useState<Sensitivity>('normal')
+  const [scope, setScope] = useState<'end' | 'step'>('end')
   const [countLabel, setCountLabel] = useState('')
-  // The move called on each count of the reference ("Arms up", "Step right"), parallel to its counts.
-  const moveNames = useRef<string[]>([])
-  // 3D world landmarks per reference frame (parallel to ref.frames), for the 3D ghost.
-  const worldFrames = useRef<number[][][]>([])
-  const ghostCanvas = useRef<HTMLCanvasElement>(null)
-  const ghost3d = useRef<Ghost3D | null>(null)
-  const [ghostMode, setGhostMode] = useState<'3d' | 'flat'>('3d')
-  const ghostModeRef = useRef(ghostMode)
-  ghostModeRef.current = ghostMode
-  const [calling, setCalling] = useState<{ count: number; name: string } | null>(null)
-  const ref = useRef<RefData | null>(null)
-  const session = useRef<string | null>(null)
-  const clock = useRef({ start: 0, speed: 1, phase: 'loading' as Phase, drill: 'full' as Drill })
-  // Which half the 'half' drill uses (1 or 2), set from the last result's worst count.
-  const half = useRef<1 | 2 | null>(null)
-  const samples = useRef<UserSample[]>([])
-  const dancerRef = useRef<Person | undefined>(undefined)
-  const audio = useRef<AudioContext | null>(null)
+  const [calling, setCalling] = useState<{ seg: number; count: number; name: string } | null>(null)
+  const [pause, setPause] = useState<Pause | null>(null)
+  const [held, setHeld] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const [habit, setHabit] = useState<string | null>(null)
+  const [summary, setSummary] = useState<{ clean: number; pauses: number; trickiest: number | null } | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const refVideo = useRef<HTMLVideoElement>(null)
-  const [question, setQuestion] = useState('')
-  const [asking, setAsking] = useState(false)
-  const [listening, setListening] = useState(false)
-  const recogniser = useRef<SpeechRecognitionLike | null>(null)
-  const [coachAnswer, setCoachAnswer] = useState<{ answer: string; drill: { drill: Drill; speed: number; reason: string } | null } | null>(null)
-  const lostSince = useRef<number | null>(null)
-  const style = styleFor(routine.style)
-  const { getToken } = useAuth()
   const [persona, setPersona] = useState<'calm' | 'hype'>('hype')
+  const [ghostMode, setGhostMode] = useState<'3d' | 'flat'>('3d')
   const personaRef = useRef(persona)
   personaRef.current = persona
+  const sensitivityRef = useRef(sensitivity)
+  sensitivityRef.current = sensitivity
+  const scopeRef = useRef(scope)
+  scopeRef.current = scope
+  const ghostModeRef = useRef(ghostMode)
+  ghostModeRef.current = ghostMode
   const speak = useRef(makeSpeak(getToken, () => personaRef.current)).current
-  const replay = useRef<HTMLCanvasElement>(null)
-  clock.current.phase = phase
 
-  // The original (silent) routine video, for the side-by-side preview.
+  // Everything the per-frame callbacks need, kept in one mutable place.
+  const S = useRef({
+    phase: 'loading' as Phase,
+    segs: [] as Seg[],
+    all: null as RefData | null, // the whole section as one reference timeline
+    world: [] as number[][][],
+    secStart: 0, // song time where the section starts
+    end: 0, // section length (s)
+    baseSpeed: 1,
+    speed: 1,
+    perf: { running: false, base: 0, at: 0 }, // fallback clock when there's no video
+    seg: 0, // 8-count being danced (index into segs)
+    lastCount: -1,
+    samples: [] as UserSample[], // this 8-count's frames, for its score
+    detector: null as MistakeDetector | null,
+    target: null as { frame: Frame; j: number; bone: number } | null, // frozen pose while paused
+    heldSince: null as number | null,
+    lostSince: null as number | null,
+    lastErrs: [] as (number | null)[],
+    pausesAt: new Map<number, number>(),
+    slowed: false,
+    stats: { clean: 0, pauses: 0 },
+    session: null as string | null,
+    timers: [] as number[],
+    music: false,
+  })
+  S.current.phase = phase
+  const video = useRef<HTMLVideoElement>(null)
+  const ac = useRef<AudioContext | null>(null)
+  const ghostCanvas = useRef<HTMLCanvasElement>(null)
+  const ghost3d = useRef<Ghost3D | null>(null)
+  const snapshot = useRef<HTMLCanvasElement>(null)
+
+  // Which 8-counts flow: from this step's first one to the end of the routine (or just this step, on repeat).
+  const startIdx = step.eight_counts[0]
+  const idxs = scope === 'step' ? step.eight_counts : routine.eight_counts.map((e) => e.idx).filter((i) => i >= startIdx)
+  const idxKey = idxs.join(',')
+
+  // The original (silent) routine video: the clock for the whole flow.
   useEffect(() => {
     let url: string | null = null
-    api<Response>(`/api/routines/${routine.id}/video`, {}).catch(() => null) // warm auth; real fetch below
     ;(async () => {
       try {
         const token = await getToken()
@@ -234,93 +119,62 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
         if (!res.ok) return
         url = URL.createObjectURL(await res.blob())
         setVideoUrl(url)
-      } catch { /* no preview */ }
+      } catch { /* no preview: a timer is the clock */ }
     })()
     return () => { if (url) URL.revokeObjectURL(url) }
-  }, [api, getToken, routine.id])
+  }, [getToken, routine.id])
 
-  // Segment of the original video this step covers (for preview looping / sync).
-  const seg = (() => {
-    const ecs = routine.eight_counts.filter((e) => step.eight_counts.includes(e.idx))
-    return { start: Math.min(...ecs.map((e) => e.start_s)), end: Math.max(...ecs.map((e) => e.end_s)) }
-  })()
-
-  // Load the reference for every 8-count in this step and join them into one timeline.
+  // Load every 8-count's reference and join them into one timeline.
   useEffect(() => {
     let cancelled = false
+    setPhase('loading')
     ;(async () => {
-      const refs = await Promise.all(step.eight_counts.map((i) => api<Reference>(`/api/routines/${routine.id}/eight-counts/${i}/reference`)))
-      const s = await api<{ id: string }>(`/api/routines/${routine.id}/sessions`, { method: 'POST' })
+      const list = idxKey.split(',').map(Number)
+      const refs = await Promise.all(list.map((i) => api<Reference>(`/api/routines/${routine.id}/eight-counts/${i}/reference`)))
+      const session = S.current.session ?? (await api<{ id: string }>(`/api/routines/${routine.id}/sessions`, { method: 'POST' })).id
       if (cancelled) return
+      const segs: Seg[] = []
       const frames: Frame[] = []
+      const world: number[][][] = []
       const counts: number[] = []
       const hits: number[] = []
-      const names: string[] = []
-      const world: number[][][] = []
-      let offset = 0
+      let off = 0
       refs.forEach((r, k) => {
-        frames.push(...r.points.map(refFrame))
+        const ec = routine.eight_counts.find((e) => e.idx === list[k])
+        const fr = r.points.map(refFrame)
+        const cs = r.counts.map((c) => c - r.start)
+        const hs = (ec?.key_moments ?? []).filter((m) => m.type === 'hit').map((m) => m.t - r.start)
+        const dur = r.points.length / r.fps
+        segs.push({ idx: list[k], off, dur, ref: { frames: fr, fps: r.fps, counts: cs, hits: hs }, names: cs.map((_, j) => ec?.moves?.[j]?.name ?? '') })
+        frames.push(...fr)
         world.push(...r.points.map((_, j) => r.world?.[j] ?? []))
-        counts.push(...r.counts.map((c) => c - r.start + offset))
-        const ec = routine.eight_counts.find((e) => e.idx === step.eight_counts[k])
-        names.push(...r.counts.map((_, j) => ec?.moves?.[j]?.name ?? ''))
-        hits.push(...(ec?.key_moments ?? []).filter((m) => m.type === 'hit').map((m) => m.t - r.start + offset))
-        offset += r.points.length / r.fps
+        counts.push(...cs.map((c) => c + off))
+        hits.push(...hs.map((h) => h + off))
+        off += dur
       })
-      let data = { frames, fps: refs[0]?.fps ?? 30, counts, hits }
-      // The "toughest half" drill: only the first or second half of the step's counts.
-      if (drill === 'half') {
-        const mid = counts[Math.floor(counts.length / 2)] ?? 0
-        const useFirst = (half.current ?? 1) === 1
-        const from = useFirst ? 0 : Math.round(mid * data.fps)
-        const to = useFirst ? Math.round(mid * data.fps) : frames.length
-        data = {
-          fps: data.fps,
-          frames: frames.slice(from, to),
-          counts: counts.filter((c) => (useFirst ? c < mid : c >= mid)).map((c) => c - (useFirst ? 0 : mid)),
-          hits: hits.filter((h) => (useFirst ? h < mid : h >= mid)).map((h) => h - (useFirst ? 0 : mid)),
-        }
-        moveNames.current = names.filter((_, j) => (useFirst ? counts[j] < mid : counts[j] >= mid))
-        worldFrames.current = world.slice(from, to)
-      } else {
-        moveNames.current = names
-        worldFrames.current = world
-      }
-      ref.current = data
-      session.current = s.id
+      const all: RefData = { frames, fps: refs[0]?.fps ?? 30, counts, hits }
+      const beat = (counts[1] - counts[0]) || 0.5
+      Object.assign(S.current, {
+        segs, all, world, end: off, session,
+        secStart: routine.eight_counts.find((e) => e.idx === list[0])?.start_s ?? 0,
+        perf: { running: false, base: 0, at: 0 },
+        detector: new MistakeDetector(all, { sensitivity: sensitivityRef.current, mask: ALL_BONES, windowS: Math.max(0.8, 1.5 * beat) }),
+      })
       setPhase('ready')
     })().catch(() => !cancelled && setPhase('ready'))
-    return () => {
-      cancelled = true
-    }
-  }, [api, routine, step, drill])
+    return () => { cancelled = true }
+  }, [api, routine, idxKey])
 
-  // Preview video behaviour: loop the step while getting ready; play in sync during the rep.
   useEffect(() => {
-    const v = refVideo.current
-    if (!v || !videoUrl) return
-    v.playbackRate = Math.min(Math.max(speed, 0.25), 1)
-    if (phase === 'ready' || phase === 'feedback') {
-      v.currentTime = seg.start
-      void v.play()
-      const loop = window.setInterval(() => { if (v.currentTime >= seg.end - 0.05) v.currentTime = seg.start }, 120)
-      return () => window.clearInterval(loop)
-    }
-    if (phase === 'dancing') {
-      v.currentTime = seg.start
-      void v.play()
-      const stop = window.setInterval(() => { if (v.currentTime >= seg.end - 0.05) v.pause() }, 120)
-      return () => window.clearInterval(stop)
-    }
-    v.pause()
-  }, [phase, videoUrl, speed, seg.start, seg.end])
+    if (S.current.detector) S.current.detector.sensitivity = sensitivity
+  }, [sensitivity])
 
   useEffect(() => {
     if (!ghostCanvas.current) return
     try {
       ghost3d.current = new Ghost3D(ghostCanvas.current)
     } catch {
-      setGhostMode('flat') // no WebGL: fall back to the flat ghost
+      setGhostMode('flat') // no WebGL
     }
     return () => {
       ghost3d.current?.dispose()
@@ -328,47 +182,420 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     }
   }, [])
 
-  // Call the moves like a teacher would: the current count and its move, during the rep.
+  // ---- the clock: the video's own time, or a timer if there's no video ----
+  const now = useCallback((): number => {
+    const v = video.current
+    const st = S.current
+    if (v && videoUrl) return v.currentTime - st.secStart
+    return st.perf.running ? st.perf.base + ((performance.now() - st.perf.at) / 1000) * st.speed : st.perf.base
+  }, [videoUrl])
+
+  const halt = useCallback(() => {
+    const st = S.current
+    st.timers.forEach((t) => window.clearTimeout(t))
+    st.timers = []
+    st.perf = { running: false, base: now(), at: 0 }
+    video.current?.pause()
+  }, [now])
+
+  useEffect(() => () => halt(), [halt])
+
+  const seek = useCallback((t: number) => {
+    const st = S.current
+    st.perf = { running: false, base: t, at: 0 }
+    if (video.current && videoUrl) video.current.currentTime = st.secStart + t
+  }, [videoUrl])
+
+  const play = useCallback(() => {
+    const st = S.current
+    st.perf = { running: true, base: st.perf.base, at: performance.now() }
+    const v = video.current
+    if (v && videoUrl) {
+      v.playbackRate = st.speed
+      void v.play()
+    }
+  }, [videoUrl])
+
+  const segAt = (t: number) => {
+    const segs = S.current.segs
+    let k = 0
+    while (k + 1 < segs.length && segs[k + 1].off <= t + 1e-6) k++
+    return k
+  }
+
+  // ---- start (or restart) the flow at section time `from`, after a 4-count count-in ----
+  const flowFrom = useCallback((from: number, lead = 0.3, music = false) => {
+    const st = S.current
+    const all = st.all
+    if (!all || !all.frames.length) return
+    halt()
+    const audio = (ac.current ??= new AudioContext())
+    st.music = music
+    st.seg = segAt(from)
+    st.samples = []
+    st.target = null
+    st.heldSince = null
+    st.lostSince = null
+    st.lastCount = -1
+    seek(from)
+    setPause(null)
+    setHeld(false)
+    setSummary(null)
+    const beat = ((all.counts[1] - all.counts[0]) || 0.5) / st.speed
+    const t0 = audio.currentTime + lead
+    ;['5', '6', '7', '8'].forEach((n, k) => {
+      if (!music) click(audio, t0 + k * beat, k === 0)
+      st.timers.push(window.setTimeout(() => {
+        setCountLabel(n)
+        speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
+      }, (lead + k * beat) * 1000))
+    })
+    setPhase('countin')
+    st.timers.push(window.setTimeout(() => {
+      setCountLabel('')
+      // No mistakes are called in the first count and a half after (re)starting: find the groove.
+      st.detector?.reset(from + ((all.counts[1] - all.counts[0]) || 0.5) * 1.5)
+      play()
+      setPhase('flowing')
+    }, (lead + 4 * beat) * 1000))
+  }, [halt, play, seek])
+
+  // ---- record an 8-count as a rep (feeds mastery, habits and the coach) ----
+  const recordSeg = useCallback(async (k: number, failed: Mistake | null, count = 1) => {
+    const st = S.current
+    const seg = st.segs[k]
+    if (!seg || !st.session) return
+    const score = scoreRep(st.samples, seg.ref, 'full', { weights: style.weights, tauMs: style.tauMs, watched: style.watched, vocabulary: (f) => styleCue(style, f) })
+    const plan = routine.lesson_plan.steps ?? []
+    const owner = plan.findIndex((s) => s.type === 'learn' && s.eight_counts[0] === seg.idx)
+    const topFault = failed
+      ? failed.kind === 'shape'
+        ? { type: 'shape', count, body_part: failed.part.replace(' ', '_'), direction: failed.direction }
+        : { type: failed.kind === 'early' ? 'early' : failed.kind === 'late' ? 'late' : 'soft', count }
+      : score.topFault
+    try {
+      const res = await api<{ passed: boolean; habit: string | null }>(`/api/routines/${routine.id}/sessions/${st.session}/reps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          step_index: owner >= 0 ? owner : stepIndex,
+          eight_counts: [seg.idx],
+          speed: st.speed,
+          drill: 'full',
+          similarity: failed ? Math.min(score.similarity, 60) : score.similarity,
+          shape: score.shape,
+          timing: score.timing,
+          per_count: score.perCount,
+          timing_bias_ms: score.timingBiasMs,
+          top_fault: topFault,
+        }),
+      })
+      setHabit(res.habit)
+    } catch { /* offline: keep flowing */ }
+  }, [api, routine.id, routine.lesson_plan.steps, stepIndex, style])
+
+  // ---- pause: on a mistake, on losing the dancer, or by hand ----
+  const stopFor = useCallback((m: Mistake | null, why: 'mistake' | 'lost' | 'manual' = 'mistake') => {
+    const st = S.current
+    halt()
+    const k = st.seg
+    const seg = st.segs[k]
+    const local = (m?.t ?? now()) - (seg?.off ?? 0)
+    const count = Math.min(8, Math.max(1, seg?.ref.counts.filter((c) => c <= local + 0.05).length ?? 1))
+    if (why === 'lost') {
+      st.target = null
+      setPause({ m: null, seg: k, count, headline: 'I lost you', fixes: ["Step back so your whole body is in the frame, then we'll go again."], lost: true })
+      void speak("I lost you. Step back into the frame and we'll go again.")
+    } else if (why === 'manual' || !m) {
+      st.target = null
+      setPause({ m: null, seg: k, count, headline: 'Paused', fixes: ['Take a breath. Redo this 8-count or skip ahead when you are ready.'] })
+    } else {
+      st.stats.pauses++
+      st.pausesAt.set(k, (st.pausesAt.get(k) ?? 0) + 1)
+      if (st.all) st.target = { frame: st.all.frames[m.j], j: m.j, bone: m.bone }
+      const d = describe(m, count)
+      setPause({ m, seg: k, count, headline: d.headline, fixes: d.fixes })
+      void speak(d.spoken)
+      void recordSeg(k, m, count)
+    }
+    setPhase('paused')
+  }, [halt, now, recordSeg, speak])
+
+  // ---- redo the 8-count where the mistake was, then carry on past it ----
+  const redo = useCallback(() => {
+    const st = S.current
+    const k = pause?.seg ?? st.seg
+    if ((st.pausesAt.get(k) ?? 0) >= 2 && st.speed > 0.5) {
+      // Second stop in the same place: take this 8-count slower, then back up to speed after it.
+      const slower = SPEEDS[Math.max(0, SPEEDS.indexOf(st.speed) - 1)] ?? 0.5
+      st.speed = slower
+      st.slowed = true
+      setSpeed(slower)
+      setNote(`Second stop here, so this 8-count goes at ${slower}×. Back up to speed after it.`)
+    }
+    setCoachAnswer(null)
+    flowFrom(st.segs[k]?.off ?? 0)
+  }, [flowFrom, pause])
+
+  // Once the learner matches the target pose: say so and go again automatically.
   useEffect(() => {
-    if (phase !== 'dancing') {
-      setCalling(null)
+    if (!held || phase !== 'paused') return
+    void speak("That's it! Again from the top of this 8-count.")
+    const id = window.setTimeout(redo, 1800)
+    return () => window.clearTimeout(id)
+  }, [held, phase, redo, speak])
+
+  const finishSection = useCallback(() => {
+    const st = S.current
+    halt()
+    const tricky = [...st.pausesAt.entries()].sort((a, b) => b[1] - a[1])[0]
+    setSummary({ clean: st.stats.clean, pauses: st.stats.pauses, trickiest: tricky ? st.segs[tricky[0]]?.idx ?? null : null })
+    setPhase('done')
+    void speak(st.stats.pauses === 0 ? 'Flawless. You flowed straight through!' : 'Nice work. You made it to the end.')
+  }, [halt, speak])
+
+  // ---- every camera frame ----
+  const onFrame = useCallback((f: CamFrame) => {
+    const st = S.current
+    const me = f.people.find((p) => p.id === f.dancerId)
+    const cam = document.querySelector<HTMLVideoElement>('.posecam video')
+    const frame = me && cam ? normaliseFrame(me.body, cam.videoWidth, cam.videoHeight) : null
+
+    if (st.phase === 'paused' && st.target) {
+      // "Now you try": hold the target pose for a moment.
+      if (holding(frame, st.target.frame, st.target.bone, ALL_BONES, THRESHOLDS[sensitivityRef.current])) {
+        st.heldSince ??= performance.now()
+        if (performance.now() - st.heldSince > HOLD_S * 1000) setHeld(true)
+      } else st.heldSince = null
       return
     }
-    const id = window.setInterval(() => {
-      const r = ref.current
-      if (!r) return
-      const t = ((performance.now() - clock.current.start) / 1000) * clock.current.speed
-      let k = -1
-      while (k + 1 < r.counts.length && r.counts[k + 1] <= t + 0.05) k++
-      if (k < 0) return
-      setCalling((c) => (c && c.count === k ? c : { count: k, name: moveNames.current[k] ?? '' }))
-    }, 60)
-    return () => window.clearInterval(id)
-  }, [phase])
+    if (st.phase !== 'flowing' || !st.all) return
+    const t = now()
+    if (t >= st.end - 0.02) {
+      // End of the section: the last 8-count passes if we got here without a stop.
+      st.stats.clean++
+      void recordSeg(st.seg, null)
+      if (scopeRef.current === 'step') flowFrom(0)
+      else finishSection()
+      return
+    }
+    // Into the next 8-count: the one before went cleanly.
+    const k = segAt(t)
+    if (k !== st.seg) {
+      st.stats.clean++
+      void recordSeg(st.seg, null)
+      if (st.slowed) {
+        st.slowed = false
+        st.speed = st.baseSpeed
+        setSpeed(st.baseSpeed)
+        if (video.current) video.current.playbackRate = st.baseSpeed
+        setNote('Nailed it. Back up to speed.')
+        void speak('Nailed it. Back up to speed.')
+      }
+      st.seg = k
+      st.samples = []
+    }
+    // A click on every count (unless their own music is playing), accent on each "1"; call the move.
+    const c = st.all.counts.filter((x) => x <= t).length - 1
+    if (c !== st.lastCount && c >= 0) {
+      st.lastCount = c
+      if (!st.music && ac.current) click(ac.current, ac.current.currentTime, c % 8 === 0)
+      const seg = st.segs[k]
+      const local = seg ? seg.ref.counts.filter((x) => x <= t - seg.off + 1e-6).length - 1 : 0
+      setCalling({ seg: k, count: local + 1, name: seg?.names[local] ?? '' })
+    }
+    if (!frame) {
+      st.lostSince ??= t
+      if (t - st.lostSince > LOST_AFTER_S) stopFor(null, 'lost')
+      return
+    }
+    st.lostSince = null
+    st.samples.push({ t: t - (st.segs[k]?.off ?? 0), frame })
+    const s = st.detector?.push(t, frame)
+    if (s) st.lastErrs = s.errs
+    const m = st.detector?.check(t)
+    if (m) stopFor(m)
+  }, [finishSection, flowFrom, now, recordSeg, speak, stopFor])
 
-  const askCoach = async (spoken?: string) => {
-    const q = (spoken ?? question).trim()
-    if (q.length < 2 || !session.current) return
+  // ---- the ghost: the routine's pose for "now" (the frozen target while paused) ----
+  const overlay = useCallback((ctx: CanvasRenderingContext2D, people: Person[], dancerId: number | null) => {
+    const st = S.current
+    const all = st.all
+    if (!all || st.phase === 'loading' || st.phase === 'done' || (st.phase === 'paused' && !st.target)) {
+      ghost3d.current?.clear()
+      return
+    }
+    const paused = st.phase === 'paused' && st.target
+    const j = paused ? st.target!.j : Math.min(all.frames.length - 1, Math.max(0, Math.round(now() * all.fps)))
+    const rf = all.frames[j]
+    const me = people.find((p) => p.id === dancerId)
+    const w = ctx.canvas.width
+    const h = ctx.canvas.height
+    const at = anchor(me, w, h)
+    const mine = me ? normaliseFrame(me.body, w, h) : null
+    // Limb colours: how close you are right now (while paused, to the frozen target).
+    const md = mine ? boneDirs(mine) : null
+    const rd = boneDirs(rf)
+    const colours = BONES.map((_, i) => {
+      if (i >= 8) return 'rgba(127,216,255,0.55)'
+      let err: number | null = null
+      if (paused || st.phase === 'watching') err = md?.[i] && rd[i] ? angle(md[i]!, rd[i]!) : null
+      else if (st.phase === 'flowing') err = st.lastErrs[i] ?? null
+      if (err === null) return 'rgba(127,216,255,0.6)'
+      return err < 18 ? 'rgba(120,255,140,0.75)' : err < 32 ? 'rgba(255,200,60,0.75)' : 'rgba(255,90,90,0.85)'
+    })
+    if (ghostModeRef.current === '3d' && ghost3d.current) ghost3d.current.render(rf, st.world[j] ?? null, at, colours, w, h)
+    else {
+      ghost3d.current?.clear()
+      drawBodyGhost(ctx, rf, at, colours)
+    }
+    // While paused: an arrow from your limb to where it should be.
+    const bone = paused ? st.target!.bone : -1
+    if (bone >= 0 && mine) {
+      const [a, b] = BONES[bone]
+      const myTip = mine[b]
+      const myRoot = mine[a]
+      const refA = rf[a]
+      const refB = rf[b]
+      if (myTip && myRoot && refA && refB) {
+        const tx = at.x + (myRoot[0] + (refB[0] - refA[0])) * at.torso
+        const ty = at.y + (myRoot[1] + (refB[1] - refA[1])) * at.torso
+        const fx = at.x + myTip[0] * at.torso
+        const fy = at.y + myTip[1] * at.torso
+        if (Math.hypot(tx - fx, ty - fy) > at.torso * 0.15) drawArrow(ctx, fx, fy, tx, ty)
+      }
+    }
+  }, [now])
+
+  // The mistake snapshot: you (orange) beside the target (blue), at the moment it went wrong.
+  useEffect(() => {
+    const c = snapshot.current
+    const all = S.current.all
+    const m = pause?.m
+    if (!c || !m || !all) return
+    const ctx = c.getContext('2d')!
+    ctx.clearRect(0, 0, c.width, c.height)
+    const torso = c.height * 0.2
+    drawPose(ctx, m.frame, { x: c.width * 0.27, y: c.height * 0.55, torso }, BONES.map((_, i) => (i === m.bone ? '#ff5a5a' : 'rgba(255,170,90,0.95)')), 6)
+    drawPose(ctx, all.frames[m.j], { x: c.width * 0.73, y: c.height * 0.55, torso }, BONES.map((_, i) => (i === m.bone ? '#78ff8c' : 'rgba(127,216,255,0.95)')), 6)
+    ctx.fillStyle = '#fff'
+    ctx.font = '600 15px system-ui'
+    ctx.fillText('You', c.width * 0.27 - 14, 20)
+    ctx.fillText('Target', c.width * 0.73 - 22, 20)
+  }, [pause])
+
+  // Before starting, the video panel shows the start of the section.
+  useEffect(() => {
+    if (phase === 'ready') seek(0)
+  }, [phase, seek, videoUrl])
+
+  const begin = (from = 0, lead = 0.3, music = false) => {
+    const st = S.current
+    st.baseSpeed = speed
+    st.speed = speed
+    st.slowed = false
+    st.stats = { clean: 0, pauses: 0 }
+    st.pausesAt = new Map()
+    setNote(null)
+    setCoachAnswer(null)
+    flowFrom(from, lead, music)
+  }
+
+  const stop = () => {
+    halt()
+    setPhase('ready')
+  }
+
+  // "Watch it first": this step's 8-counts once, ghost and video together, no judging.
+  const watch = () => {
+    const st = S.current
+    halt()
+    st.speed = speed
+    seek(0)
+    play()
+    setPhase('watching')
+    const stepEnd = st.segs.filter((s) => step.eight_counts.includes(s.idx)).reduce((a, s) => Math.max(a, s.off + s.dur), 0) || st.end
+    const id = window.setInterval(() => {
+      if (S.current.phase !== 'watching' || now() >= stepEnd - 0.05) {
+        window.clearInterval(id)
+        if (S.current.phase === 'watching') stop()
+      }
+    }, 100)
+  }
+
+  // ---- mic sync: their own copy of the song starts the flow on the beat ----
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const syncToMusic = async () => {
+    const all = S.current.all
+    if (!all) return
+    setSyncMsg('Listening… play the song out loud')
+    try {
+      const { pcm, endedAt } = await recordSnippet(6)
+      setSyncMsg('Finding your place in the song…')
+      const res = await api<{ position: number | null; confidence: number }>(`/api/routines/${routine.id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: pcm.buffer as ArrayBuffer,
+      })
+      if (res.position === null || res.confidence < 0.3) {
+        setSyncMsg("Couldn't hear the song clearly. Turn it up, move closer, and try again.")
+        return
+      }
+      const songNow = res.position + (performance.now() - endedAt) / 1000
+      const delay = countInDelay(songNow, [S.current.secStart], (all.counts[1] - all.counts[0]) || 0.5)
+      if (delay === null) {
+        setSyncMsg('This part of the song has passed. Restart the song and press Sync again.')
+        return
+      }
+      setSyncMsg(`Synced. Count-in in ${Math.round(delay)} s.`)
+      begin(0, delay, true)
+      window.setTimeout(() => setSyncMsg(null), delay * 1000 + 2000)
+    } catch (e) {
+      setSyncMsg(e instanceof Error && e.name === 'NotAllowedError' ? 'Microphone blocked: allow it in the browser to sync.' : "Sync didn't work this time. Use Start instead.")
+    }
+  }
+
+  // ---- ask the coach (typed or spoken), with the mistake as context ----
+  const [question, setQuestion] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [listening, setListening] = useState(false)
+  const recogniser = useRef<SpeechRecognitionLike | null>(null)
+  const [coachAnswer, setCoachAnswer] = useState<{ answer: string; drill: { drill: string; speed: number; reason: string } | null } | null>(null)
+  const askCoach = async (q: string) => {
+    q = q.trim()
+    if (q.length < 2) return
     setAsking(true)
     setCoachAnswer(null)
     try {
-      const repCtx = result ? { similarity: result.similarity, shape: result.shape, timing: result.timing, dynamics: result.dynamics, top_fault: result.topFault, notes: result.notes, per_count: result.perCount } : null
-      const r = await api<{ answer: string; drill: { drill: Drill; speed: number; reason: string } | null }>(`/api/routines/${routine.id}/ask`, {
+      const m = pause?.m
+      const ctx = pause
+        ? {
+            paused_on: pause.headline,
+            fixes: pause.fixes,
+            eight_count: (S.current.segs[pause.seg]?.idx ?? 0) + 1,
+            count: pause.count,
+            ...(m ? {
+              body_part: m.part,
+              move_it: m.direction,
+              timing: m.lag < -0.28 ? 'late' : m.lag > 0.12 ? 'early' : 'on time',
+              speed_vs_routine: m.speedRatio === null ? null : m.speedRatio < 0.6 ? 'too small/slow' : m.speedRatio > 1.8 ? 'too fast' : 'fine',
+            } : {}),
+          }
+        : null
+      const r = await api<{ answer: string; drill: { drill: string; speed: number; reason: string } | null }>(`/api/routines/${routine.id}/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, step_index: stepIndex, rep_context: repCtx }),
+        body: JSON.stringify({ question: q, step_index: stepIndex, rep_context: ctx }),
       })
       setCoachAnswer(r)
       setQuestion('')
       void speak(r.answer)
     } catch {
-      setCoachAnswer({ answer: "I didn't catch that — try again in a moment.", drill: null })
+      setCoachAnswer({ answer: "I didn't catch that. Try again in a moment.", drill: null })
     } finally {
       setAsking(false)
     }
   }
-
-  // Spoken questions: the browser's own speech recognition (Chrome/Edge/Safari), so no extra service.
   const Recognition = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
     ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition
   const listen = () => {
@@ -398,254 +625,18 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
     r.start()
   }
 
-  // lead: seconds until the count-in begins; music: the learner's song gives the beat, so no clicks.
-  const start = useCallback((lead = 0.3, music = false) => {
-    const r = ref.current
-    if (!r || !r.frames.length) return
-    const ac = (audio.current ??= new AudioContext())
-    const beat = (r.counts[1] - r.counts[0] || 0.5) / speed // real seconds per count
-    const t0 = ac.currentTime + lead
-    // Count-in: "5, 6, 7, 8" on the beat, then the rep starts on "1".
-    ;['5', '6', '7', '8'].forEach((n, k) => {
-      if (!music) click(ac, t0 + k * beat, k === 0)
-      window.setTimeout(() => {
-        setCountLabel(n)
-        speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
-      }, (lead + k * beat) * 1000)
-    })
-    const repStartIn = lead + 4 * beat
-    // Click track for the rep, accented on each "1".
-    if (!music) r.counts.forEach((c, k) => click(ac, t0 + 4 * beat + c / speed, k % 8 === 0))
-    samples.current = []
-    setResult(null)
-    setNext(null)
-    setPhase('countin')
-    window.setTimeout(() => {
-      clock.current = { ...clock.current, start: performance.now(), speed, drill }
-      setCountLabel('')
-      setPhase('dancing')
-    }, repStartIn * 1000)
-  }, [speed, drill])
+  const title = scope === 'step'
+    ? (step.type === 'chain' ? `8-counts ${step.eight_counts.map((i) => i + 1).join('+')}, on repeat` : `8-count ${startIdx + 1}, on repeat`)
+    : `From 8-count ${startIdx + 1} to the end`
+  const firstMoves = routine.eight_counts.find((e) => e.idx === startIdx)?.moves
+  const segNo = (k: number) => (S.current.segs[k]?.idx ?? 0) + 1
 
-  // Mic sync: listen to the learner's own copy of the song, find where it is, and start the
-  // count-in so "1" lands exactly when the song reaches this step (or a later repeat of it).
-  const [syncMsg, setSyncMsg] = useState<string | null>(null)
-  const syncToMusic = async () => {
-    const r = ref.current
-    if (!r) return
-    setSyncMsg('Listening… play the song out loud')
-    try {
-      const { pcm, endedAt } = await recordSnippet(6)
-      setSyncMsg('Finding your place in the song…')
-      const res = await api<{ position: number | null; confidence: number }>(`/api/routines/${routine.id}/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: pcm.buffer as ArrayBuffer,
-      })
-      if (res.position === null || res.confidence < 0.3) {
-        setSyncMsg("Couldn't hear the song clearly. Turn it up, move closer, and try again.")
-        return
-      }
-      const songNow = res.position + (performance.now() - endedAt) / 1000
-      const first = step.eight_counts[0]
-      const starts = routine.eight_counts
-        .filter((e) => e.idx === first || (step.eight_counts.length === 1 && e.repeat_of === first))
-        .map((e) => e.start_s)
-      const beat = r.counts[1] - r.counts[0] || 0.5
-      const delay = countInDelay(songNow, starts, beat)
-      if (delay === null) {
-        setSyncMsg('This part of the song has passed. Restart the song and press Sync again.')
-        return
-      }
-      setSyncMsg(`Synced at ${songNow.toFixed(1)} s. Get ready, count-in in ${Math.round(delay)} s.`)
-      start(delay, true)
-      window.setTimeout(() => setSyncMsg(null), (delay + 4 * beat) * 1000)
-    } catch (e) {
-      setSyncMsg(e instanceof Error && e.name === 'NotAllowedError' ? 'Microphone blocked: allow it in the browser to sync.' : "Sync didn't work this time. Use Start instead.")
-    }
-  }
-
-  const finish = useCallback(async (lost = false) => {
-    const r = ref.current!
-    const score = scoreRep(samples.current, r, drill, {
-      weights: style.weights,
-      tauMs: style.tauMs,
-      watched: style.watched,
-      vocabulary: (f) => styleCue(style, f),
-    })
-    score.lost = lost
-    if (lost) score.cue = "You got lost — no stress. Let's take it from the top."
-    half.current = score.worstCount <= Math.ceil(score.perCount.length / 2) ? 1 : 2
-    setResult(score)
-    setPhase('feedback')
-    void speak(score.cue)
-    if (!session.current) return
-    try {
-      const res = await api<{ passed: boolean; next: Next; habit: string | null }>(`/api/routines/${routine.id}/sessions/${session.current}/reps`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          step_index: stepIndex,
-          eight_counts: step.eight_counts,
-          speed,
-          drill,
-          similarity: score.similarity,
-          shape: score.shape,
-          timing: score.timing,
-          per_count: score.perCount,
-          timing_bias_ms: score.timingBiasMs,
-          top_fault: score.topFault,
-        }),
-      })
-      setNext(res.next)
-      setHabit(res.habit)
-    } catch {
-      /* offline: still show the score */
-    }
-  }, [api, drill, routine.id, speed, step.eight_counts, stepIndex])
-
-  // Record the dancer each frame during a rep; end the rep when the reference runs out.
-  const onFrame = useCallback(
-    (f: CamFrame) => {
-      const me = f.people.find((p) => p.id === f.dancerId)
-      dancerRef.current = me
-      const c = clock.current
-      if (c.phase !== 'dancing' || !ref.current) return
-      const t = ((performance.now() - c.start) / 1000) * c.speed
-      const dur = ref.current.frames.length / ref.current.fps
-      if (t >= dur) {
-        clock.current.phase = 'feedback'
-        void finish()
-        return
-      }
-      const v = document.querySelector<HTMLVideoElement>('.posecam video')
-      if (me && v) {
-        const frame = normaliseFrame(me.body, v.videoWidth, v.videoHeight) as Frame
-        samples.current.push({ t, frame })
-        // Completely lost? (way off the routine for a sustained stretch, past the first count)
-        const r = ref.current
-        const j = Math.min(r.frames.length - 1, Math.round(t * r.fps))
-        const ud = frame ? boneDirs(frame) : null
-        const rd = boneDirs(r.frames[j])
-        let cost = 0
-        let n = 0
-        if (ud) ud.forEach((u, b) => { const rb = rd[b]; if (u && rb && b < 8) { cost += 1 - (u[0] * rb[0] + u[1] * rb[1]); n++ } })
-        const off = n >= 4 ? cost / n : 0
-        const firstCount = r.counts[1] ?? 0.5
-        if (t > firstCount && off > LOST_COST) {
-          lostSince.current ??= t
-          if (t - lostSince.current > LOST_AFTER_S) {
-            clock.current.phase = 'feedback'
-            lostSince.current = null
-            void finish(true)
-            return
-          }
-        } else lostSince.current = null
-      }
-    },
-    [finish],
-  )
-
-  // The ghost: the reference pose for "now", drawn on the learner, each limb coloured by how close they are.
-  const overlay = useCallback((ctx: CanvasRenderingContext2D, people: Person[], dancerId: number | null) => {
-    const r = ref.current
-    const c = clock.current
-    if (!r || !(c.phase === 'dancing' || c.phase === 'countin' || c.phase === 'ready')) {
-      ghost3d.current?.clear()
-      return
-    }
-    let t = c.phase === 'dancing' ? ((performance.now() - c.start) / 1000) * c.speed : 0
-    if (c.drill === 'freeze') {
-      // Hold each count's key shape instead of flowing between them.
-      const k = Math.max(0, r.counts.findIndex((x) => x > t) - 1)
-      t = r.counts[k === -1 ? r.counts.length - 1 : k] ?? 0
-    }
-    const j = Math.min(r.frames.length - 1, Math.max(0, Math.round(t * r.fps)))
-    const rf = r.frames[j]
-    const me = people.find((p) => p.id === dancerId)
-    const w = ctx.canvas.width
-    const h = ctx.canvas.height
-    const at = anchor(me, w, h)
-    const mask = boneMask(c.drill)
-    const mine = me ? normaliseFrame(me.body, w, h) : null
-    const md = mine ? boneDirs(mine) : null
-    const rd = boneDirs(rf)
-    let worstBone = -1
-    let worstErr = 25 // only point an arrow at genuinely wrong limbs
-    const colours = BONES.map((_, i) => {
-      if (!mask[i]) return 'rgba(127,216,255,0.12)'
-      const a = md?.[i]
-      const b = rd[i]
-      if (!a || !b || i >= 8) return 'rgba(127,216,255,0.55)'
-      const err = angle(a, b)
-      if (err > worstErr && c.phase === 'dancing') { worstErr = err; worstBone = i }
-      return err < 15 ? 'rgba(120,255,140,0.75)' : err < 30 ? 'rgba(255,200,60,0.75)' : 'rgba(255,90,90,0.8)'
-    })
-    if (ghostModeRef.current === '3d' && ghost3d.current) {
-      ghost3d.current.render(rf, worldFrames.current[j] ?? null, at, colours, w, h)
-    } else {
-      ghost3d.current?.clear()
-      drawBodyGhost(ctx, rf, at, colours)
-    }
-    // The arrow: from where your limb's tip is to where the routine wants it.
-    if (worstBone >= 0 && mine) {
-      const [a, b] = BONES[worstBone]
-      const myTip = mine[b]
-      const refA = rf[a]
-      const refB = rf[b]
-      const myRoot = mine[a]
-      if (myTip && myRoot && refA && refB) {
-        // Target: the reference bone re-rooted at YOUR joint, so the arrow shows pure direction change.
-        const tx = at.x + (myRoot[0] + (refB[0] - refA[0])) * at.torso
-        const ty = at.y + (myRoot[1] + (refB[1] - refA[1])) * at.torso
-        const fx = at.x + myTip[0] * at.torso
-        const fy = at.y + myTip[1] * at.torso
-        const len = Math.hypot(tx - fx, ty - fy)
-        if (len > at.torso * 0.18) drawArrow(ctx, fx, fy, tx, ty)
-      }
-    }
-  }, [])
-
-  // Replay of the worst count: the learner (orange) beside the reference (blue), looping at half speed.
-  useEffect(() => {
-    if (phase !== 'feedback' || !result || !replay.current || !ref.current) return
-    const r = ref.current
-    const canvas = replay.current
-    const ctx = canvas.getContext('2d')!
-    const from = r.counts[result.worstCount - 1] ?? 0
-    const to = r.counts[result.worstCount] ?? r.frames.length / r.fps
-    const mine = samples.current.filter((s) => s.t >= from && s.t <= to && s.frame)
-    let raf = 0
-    const t0 = performance.now()
-    const draw = () => {
-      const t = from + ((((performance.now() - t0) / 1000) * 0.5) % Math.max(0.1, to - from))
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      const rf = r.frames[Math.min(r.frames.length - 1, Math.round(t * r.fps))]
-      const all = BONES.map(() => '#7fd8ff')
-      drawPose(ctx, rf, { x: canvas.width * 0.72, y: canvas.height * 0.55, torso: canvas.height * 0.2 }, all, 5)
-      const u = mine.reduce<UserSample | null>((best, s) => (!best || Math.abs(s.t - t) < Math.abs(best.t - t) ? s : best), null)
-      if (u?.frame) drawPose(ctx, u.frame, { x: canvas.width * 0.28, y: canvas.height * 0.55, torso: canvas.height * 0.2 }, BONES.map(() => '#ffb347'), 5)
-      raf = requestAnimationFrame(draw)
-    }
-    draw()
-    return () => cancelAnimationFrame(raf)
-  }, [phase, result])
-
-  const applyNext = () => {
-    if (!next) return
-    if (next.action === 'next_step') return onNextStep()
-    if (next.speed) setSpeed(next.speed)
-    if (next.drill) setDrill(next.drill)
-    setPhase('ready')
-  }
-
-  const title = step.type === 'chain' ? `Checkpoint ${step.eight_counts.map((i) => i + 1).join('+')}` : `8-count ${step.eight_counts[0] + 1}`
   return (
     <section className="practice">
       <header className="practice-head">
-        <button className="link" onClick={onExit}>← Lesson tree</button>
+        <button className="link" onClick={() => { halt(); onExit() }}>← Lesson tree</button>
         <h2>{title}</h2>
-        <span className="chip">{speed}× · {DRILL_LABEL[drill]}</span>
+        <span className="chip">{speed}×</span>
         <button className="chip" onClick={() => setGhostMode((m) => (m === '3d' ? 'flat' : '3d'))} title="Switch the ghost between 3D and flat">
           👻 {ghostMode === '3d' ? '3D ghost' : 'Flat ghost'}
         </button>
@@ -658,88 +649,117 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
-          {phase === 'dancing' && <div className="recording">● dancing</div>}
-          {calling && (
+          {phase === 'flowing' && <div className="recording">● flowing · 8-count {segNo(calling?.seg ?? S.current.seg)}</div>}
+          {phase === 'paused' && <div className="recording paused">❚❚ paused</div>}
+          {phase === 'flowing' && calling && (
             <div className="caller">
-              <b>{(calling.count % 8) + 1}</b> {calling.name}
+              <b>{calling.count}</b> {calling.name}
             </div>
           )}
         </div>
-        {videoUrl && (
-          <div className="refpanel">
-            <video ref={refVideo} src={videoUrl} muted playsInline loop={false} />
-            <span className="notice">The routine (your upload, muted{speed < 1 ? `, at ${Math.min(Math.max(speed, 0.25), 1)}×` : ''})</span>
-          </div>
-        )}
+        <div className="refpanel">
+          {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <p className="notice">Loading the routine video…</p>}
+          <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
+        </div>
       </div>
 
-      {phase === 'loading' && <p className="notice">Loading the routine…</p>}
+      {note && <p className="notice flow-note">{note}</p>}
       {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
-      {phase === 'ready' && step.eight_counts.length === 1 && (() => {
-        const ms = routine.eight_counts.find((e) => e.idx === step.eight_counts[0])?.moves
-        return ms?.length ? (
-          <ol className="movelist" aria-label="The moves">
-            {ms.map((m) => <li key={m.count}><b>{m.count}</b>{m.name}</li>)}
-          </ol>
-        ) : null
-      })()}
+      {phase === 'loading' && <p className="notice">Loading the routine…</p>}
+
       {phase === 'ready' && (
-        <div className="controls">
-          <button className="primary" onClick={() => start()}>Start ({speed}×)</button>
-          {routine.beat_source === 'music' && (
-            <button onClick={() => void syncToMusic()} disabled={speed !== 1 || drill === 'half' || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : drill === 'half' ? 'Not for the half drill' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
-              🎵 Sync to my music
-            </button>
-          )}
-          <label>
-            Speed{' '}
-            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
-              {[0.25, 0.5, 0.75, 1].map((s) => <option key={s} value={s}>{s}×</option>)}
-            </select>
-          </label>
-          <span className="notice">Stand back so your whole body is in frame. The blue ghost shows the move; limbs turn green when you match.</span>
-        </div>
-      )}
-      {phase === 'feedback' && result && (
-        <div className="feedback">
-          <div className="score">
-            <span className={`big ${result.similarity >= 80 ? 'pass' : ''}`}>{result.similarity}</span>
-            <span className="notice">shape {result.shape}{result.timing !== null ? ` · timing ${result.timing}` : ''}{result.dynamics !== null ? ` · energy ${result.dynamics}` : ''}{result.timingBiasMs && Math.abs(result.timingBiasMs) > 60 ? ` · ${result.timingBiasMs > 0 ? 'a little late' : 'a little early'}` : ''}</span>
-          </div>
-          <p className="cue">“{result.cue}”</p>
-          {habit && <p className="habit">Pattern spotted across your reps: <b>{habit}</b></p>}
-          {result.notes.length > 0 && (
-            <ul className="rep-notes">
-              {result.notes.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
-          )}
-          <div className="counts">
-            {result.perCount.map((s, k) => (
-              <span key={k} className={`count ${s >= 80 ? 'good' : s >= 60 ? 'ok' : 'bad'} ${k + 1 === result.worstCount ? 'worst' : ''}`} title={`count ${k + 1}: ${s}`}>
-                {(k % 8) + 1}
-              </span>
-            ))}
-          </div>
-          <div className="replay">
-            <canvas ref={replay} width={560} height={300} />
-            <span className="notice">Count {result.worstCount}, half speed: you (orange) vs the routine (blue)</span>
-          </div>
+        <>
+          {firstMoves?.length ? (
+            <ol className="movelist" aria-label="The moves">
+              {firstMoves.map((m) => <li key={m.count}><b>{m.count}</b>{m.name}</li>)}
+            </ol>
+          ) : null}
           <div className="controls">
-            {next && <button className="primary" onClick={applyNext}>{next.action === 'next_step' ? 'Next step →' : `Next: ${next.speed}× · ${DRILL_LABEL[next.drill ?? 'full']}`}</button>}
-            <button onClick={() => setPhase('ready')}>Again</button>
-            {next && <span className="notice">{next.reason}</span>}
+            <button className="primary" onClick={() => begin()}>▶ Start flowing ({speed}×)</button>
+            <button onClick={watch}>👀 Watch it first</button>
+            {routine.beat_source === 'music' && (
+              <button onClick={() => void syncToMusic()} disabled={speed !== 1 || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
+                🎵 Sync to my music
+              </button>
+            )}
+            <label>
+              Speed{' '}
+              <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+                {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
+              </select>
+            </label>
+            <label>
+              Stop me when{' '}
+              <select value={sensitivity} onChange={(e) => setSensitivity(e.target.value as Sensitivity)}>
+                <option value="relaxed">it's way off</option>
+                <option value="normal">it's noticeably off</option>
+                <option value="strict">anything's off</option>
+              </select>
+            </label>
+            <label>
+              Flow{' '}
+              <select value={scope} onChange={(e) => setScope(e.target.value as 'end' | 'step')}>
+                <option value="end">to the end of the routine</option>
+                <option value="step">this step only, on repeat</option>
+              </select>
+            </label>
+          </div>
+          <span className="notice">Dance straight through with the video. I only stop you when something is noticeably off, show you the fix, let you try it, then we go again from that 8-count and on past it.</span>
+        </>
+      )}
+
+      {(phase === 'flowing' || phase === 'countin' || phase === 'watching') && (
+        <div className="controls">
+          <button onClick={stop}>■ Stop</button>
+          {phase === 'flowing' && <button onClick={() => stopFor(null, 'manual')}>❚❚ Pause</button>}
+        </div>
+      )}
+
+      {phase === 'paused' && pause && (
+        <div className="mistake">
+          <h3>{pause.headline}{!pause.lost && <span className="notice"> · 8-count {segNo(pause.seg)}</span>}</h3>
+          <ul className="fixes">
+            {pause.fixes.map((f, i) => <li key={i}>{f}</li>)}
+          </ul>
+          {pause.m && (
+            <div className="mistake-row">
+              <canvas ref={snapshot} width={420} height={260} className="snapshot" />
+              <div className={`try ${held ? 'ok' : ''}`}>
+                {held ? <b>✓ That's it! Going again from count 1…</b> : <><b>Now you try:</b> get into the ghost's pose on the camera. Limbs go green when they match, and we'll go again.</>}
+              </div>
+            </div>
+          )}
+          {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
+          <div className="controls">
+            <button className="primary" onClick={redo}>↻ Redo this 8-count</button>
+            {pause.m && <button onClick={() => void askCoach(`How do I fix this? ${pause.headline}. ${pause.fixes.join(' ')}`)} disabled={asking}>❓ How do I fix it?</button>}
+            <button onClick={() => {
+              const st = S.current
+              const seg = st.segs[pause.seg]
+              const resumeAt = seg ? seg.off + (seg.ref.counts[pause.count] ?? seg.dur) : 0
+              flowFrom(Math.min(resumeAt, Math.max(0, st.end - 0.5)))
+            }}>Skip ahead →</button>
+            <button onClick={stop}>■ Stop</button>
           </div>
         </div>
       )}
-      {(phase === 'feedback' || phase === 'ready') && (
+
+      {phase === 'done' && summary && (
+        <div className="feedback">
+          <p className="cue">{summary.pauses === 0 ? 'Flawless: straight through without a stop!' : `Made it to the end: ${summary.clean} clean 8-count${summary.clean === 1 ? '' : 's'}, ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}.`}</p>
+          {summary.trickiest !== null && <p className="notice">Trickiest: 8-count {summary.trickiest + 1}.</p>}
+          {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
+          <div className="controls">
+            <button className="primary" onClick={() => begin()}>↻ Flow again</button>
+            <button onClick={onNextStep}>Next step →</button>
+          </div>
+        </div>
+      )}
+
+      {(phase === 'paused' || phase === 'ready' || phase === 'done') && (
         <div className="ask">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              void askCoach()
-            }}
-          >
-            <input placeholder='Ask the coach — "am I lifting my arm high enough?", "I can&apos;t get the spin"' value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
+          <form onSubmit={(e) => { e.preventDefault(); void askCoach(question) }}>
+            <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
             {Recognition && (
               <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title="Ask out loud">
                 {listening ? '● Listening…' : '🎤 Speak'}
@@ -750,17 +770,15 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep 
           {coachAnswer && (
             <div className="coach-says">
               <p>🗣️ {coachAnswer.answer}</p>
-              {coachAnswer.drill && (
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setSpeed(coachAnswer.drill!.speed)
-                    setDrill(coachAnswer.drill!.drill)
-                    setCoachAnswer(null)
-                    setPhase('ready')
-                  }}
-                >
-                  Try it: {coachAnswer.drill.speed}× · {DRILL_LABEL[coachAnswer.drill.drill]} — {coachAnswer.drill.reason}
+              {coachAnswer.drill && phase === 'paused' && (
+                <button className="primary" onClick={() => {
+                  const s = coachAnswer.drill!.speed
+                  S.current.speed = s
+                  S.current.slowed = s !== S.current.baseSpeed
+                  setSpeed(s)
+                  redo()
+                }}>
+                  Try it at {coachAnswer.drill.speed}×: {coachAnswer.drill.reason}
                 </button>
               )}
             </div>

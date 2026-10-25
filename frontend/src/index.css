@@ -146,3 +146,14 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .ask input { flex: 1; padding: 0.7rem; border-radius: 10px; border: 1px solid #3a3448; background: #0f0d15; color: var(--ink); font-size: 1rem; }
 .ask .mic.on { background: #c0392b; color: #fff; border-color: #c0392b; }
 .habit { background: #2a2014; border-left: 3px solid var(--spot); padding: 0.5rem 0.8rem; border-radius: 0 8px 8px 0; }
+
+/* Continuous flow: the pause-on-mistake card */
+.mistake { margin-top: 1rem; padding: 1rem 1.2rem; border-radius: 14px; background: #1d1928; border: 1px solid #ff5a5a66; }
+.mistake h3 { margin: 0 0 0.5rem; font-size: 1.35rem; }
+.mistake .fixes { margin: 0 0 0.8rem; padding-left: 1.2rem; font-size: 1.1rem; line-height: 1.5; }
+.mistake-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.mistake .snapshot { background: #0f0d15; border-radius: 10px; max-width: 100%; }
+.mistake .try { flex: 1; min-width: 200px; padding: 0.8rem; border-radius: 10px; background: #2a2438; }
+.mistake .try.ok { background: #1f4a2c; }
+.recording.paused { color: #ffd166; }
+.flow-note { color: var(--spot); opacity: 1; }

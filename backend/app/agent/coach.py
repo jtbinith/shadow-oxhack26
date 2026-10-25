@@ -258,7 +258,11 @@ def ask(routine_id: str, user_id: str, question: str, step_index: int, rep_conte
     t_data = time.time()
     data = {"recent_reps": get_recent_reps(step_index)["reps_newest_first"][:6], "habits": base["get_habits"]()["habits_from_clustering"][:5]}
     log.warning("coach.ask data fetch %.1fs", time.time() - t_data)
-    ctx = f" Latest rep: {json.dumps(rep_context)[:600]}." if rep_context else ""
+    if rep_context and "paused_on" in rep_context:
+        # The continuous flow stopped on this mistake; the question is usually about fixing it.
+        ctx = f" The practice flow just paused on this mistake (fix this first): {json.dumps(rep_context)[:600]}."
+    else:
+        ctx = f" Latest rep: {json.dumps(rep_context)[:600]}." if rep_context else ""
     history: list = [{"type": "user_input", "content": [{"type": "text", "text":
         f"Lesson step {step_index}. Learner asks: {question[:300]!r}.{ctx}\nTheir data: {json.dumps(data, default=str)[:2500]}"}]}]
     drill_tool = [t for t in ASK_TOOLS if t["name"] == "suggest_drill"]
