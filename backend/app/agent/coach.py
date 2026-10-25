@@ -7,6 +7,7 @@ saving, and the rule-based planner as fallback — a broken agent can never brea
 """
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +19,12 @@ from ..config import settings
 from . import plan as lesson_plan
 
 log = logging.getLogger(__name__)
+# No emojis in anything the app shows or speaks.
+_EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]")
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"\s{2,}", " ", _EMOJI.sub("", text)).strip()
 _here = Path(__file__).resolve()
 PLAYBOOKS = next((p for p in (_here.parents[2] / "playbooks", _here.parents[3] / "playbooks") if p.is_dir()), _here.parents[2] / "playbooks")
 
@@ -164,7 +171,7 @@ def _run_agent(routine_id: str, user_id: str, request: str, ecs: list[dict], tem
         calls = [s for s in interaction.steps if s.type == "function_call"]
         history.extend(s.model_dump(exclude_none=True) for s in interaction.steps)
         if not calls:
-            explanation = (interaction.output_text or "").strip()
+            explanation = _plain(interaction.output_text or "")
             break
         results = []
         for fc in calls:
@@ -320,7 +327,7 @@ def ask(routine_id: str, user_id: str, question: str, step_index: int, rep_conte
     )
     log.warning("coach.ask model call %.1fs", time.time() - t0)
     out = json.loads(interaction.output_text or "{}")
-    answer = str(out.get("answer", "")).strip()
+    answer = _plain(str(out.get("answer", "")))
     if not answer:
         raise RuntimeError("no answer")
     return {"answer": answer[:600], "actions": _actions(out.get("actions", []))}

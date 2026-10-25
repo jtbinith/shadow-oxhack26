@@ -65,7 +65,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
         </p>
         {routine.lesson_plan.summary && <p>{routine.lesson_plan.summary}</p>}
         <div className="tree-actions">
-          <button className="primary" onClick={flowAll} title="Dance the whole routine in one continuous run, stopping only on noticeable mistakes">▶ Flow the whole routine</button>
+          <button className="primary" onClick={flowAll} title="Dance the whole routine in one continuous run, stopping only on noticeable mistakes">Flow the whole routine</button>
           <button className="link" onClick={showProgress}>See progress →</button>
           <form
             className="replan"
@@ -80,7 +80,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
         </div>
         {coachSays && (
           <div className="coach-says">
-            <p>🗣️ {coachSays.text}</p>
+            <p>{coachSays.text}</p>
             {coachSays.actions.length > 0 && (
               <span className="notice">The coach looked at: {coachSays.actions.map((a) => a.replace('get_', '').replace('update_lesson_plan', 'and rewrote your plan').replace('_', ' ')).join(', ')}</span>
             )}

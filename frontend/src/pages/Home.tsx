@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApi, type Routine } from '../api'
 import { STYLES } from '../coach/styles'
 
-type Summary = Pick<Routine, 'id' | 'title' | 'status' | 'tempo_bpm' | 'created_at'>
+type Summary = Pick<Routine, 'id' | 'title' | 'status' | 'tempo_bpm' | 'created_at'> & { steps_total?: number; steps_passed?: number }
 
 export default function Home({ open, tryCamera }: { open: (id: string) => void; tryCamera: () => void }) {
   const api = useApi()
@@ -83,8 +83,15 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
           {routines?.map((r) => (
             <li key={r.id}>
               <button onClick={() => open(r.id)}>
-                <span>{r.title}</span>
+                <span className="routine-name">{r.title}</span>
                 <span className={`badge ${r.status}`}>{r.status === 'ready' ? `${Math.round(r.tempo_bpm ?? 0)} BPM` : r.status}</span>
+                {r.status === 'ready' && (r.steps_total ?? 0) > 0 && (
+                  <span className="routine-progress" title={`${r.steps_passed ?? 0} of ${r.steps_total} steps passed`}>
+                    <span className="bar"><span style={{ width: `${Math.round((100 * (r.steps_passed ?? 0)) / r.steps_total!)}%` }} /></span>
+                    <span className="notice">{r.steps_passed ?? 0}/{r.steps_total} steps</span>
+                  </span>
+                )}
+                {r.status === 'processing' && <span className="routine-progress"><span className="bar busy"><span /></span><span className="notice">building</span></span>}
               </button>
             </li>
           ))}

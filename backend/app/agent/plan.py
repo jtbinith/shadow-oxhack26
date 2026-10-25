@@ -1,6 +1,7 @@
 """Lesson plan for a routine: Gemini builds it from the curriculum playbook; a fixed-rules
 plan is used if Gemini is unavailable or returns something invalid."""
 import json
+import re
 import logging
 from pathlib import Path
 from typing import Literal
@@ -104,9 +105,10 @@ def build(eight_counts: list[dict], tempo: float, user_id: str, request: str = "
         )
         data = json.loads(interaction.output_text)
         # Trim over-long text rather than throwing a good plan away.
-        data["summary"] = str(data.get("summary", ""))[:300]
+        no_emoji = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]")
+        data["summary"] = no_emoji.sub("", str(data.get("summary", ""))).strip()[:300]
         for step in data.get("steps", []):
-            step["note"] = str(step.get("note", ""))[:120]
+            step["note"] = no_emoji.sub("", str(step.get("note", ""))).strip()[:120]
         plan = LessonPlan.model_validate(data)
         if _valid(plan, eight_counts):
             return plan, "gemini"

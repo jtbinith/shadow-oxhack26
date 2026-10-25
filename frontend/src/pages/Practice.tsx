@@ -784,7 +784,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       r.actions = r.actions ?? []
       if (extra) {
         setMore(r)
-        speak.prefetch(r.answer) // ready for 🔊
+        speak.prefetch(r.answer) // ready for Hear it
       } else {
         setCoachAnswer(r)
         setQuestion('')
@@ -878,15 +878,15 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         <h2>{title}</h2>
         <span className="chip">{speed}×</span>
         <button className="chip" onClick={() => setGhostMode((m) => (m === '3d' ? 'flat' : '3d'))} title="Switch the ghost between 3D and flat">
-          👻 {ghostMode === '3d' ? '3D ghost' : 'Flat ghost'}
+          {ghostMode === '3d' ? '3D ghost' : 'Flat ghost'}
         </button>
         {Recognition && (
           <button className={`chip ${handsFree ? 'live' : ''}`} onClick={() => setHandsFree((h) => !h)} title='Talk to the coach while you dance: "pause", "slower", "show me count 3", or ask anything'>
-            🎙 {handsFree ? 'Hands-free on' : 'Hands-free off'}
+            {handsFree ? 'Hands-free on' : 'Hands-free off'}
           </button>
         )}
         <button className="chip persona" onClick={() => setPersona((p) => (p === 'hype' ? 'calm' : 'hype'))} title="Switch coach voice">
-          🎤 {persona === 'hype' ? 'Callum (cheeky)' : 'Laura (sassy)'}
+          Voice: {persona === 'hype' ? 'Callum (cheeky)' : 'Laura (sassy)'}
         </button>
       </header>
       <div className="stage-row">
@@ -894,8 +894,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
-          {phase === 'flowing' && <div className="recording">● flowing · 8-count {segNo(calling?.seg ?? S.current.seg)}</div>}
-          {phase === 'paused' && <div className="recording paused">❚❚ paused</div>}
+          {phase === 'flowing' && <div className="recording">Flowing · 8-count {segNo(calling?.seg ?? S.current.seg)}</div>}
+          {phase === 'paused' && <div className="recording paused">Paused</div>}
           {phase === 'flowing' && calling && (
             <div className="caller">
               <b>{calling.count}</b> {calling.name}
@@ -904,12 +904,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         </div>
         <div className="refpanel">
           {videoUrl ? <video ref={video} src={videoUrl} muted playsInline /> : <p className="notice">Loading the routine video…</p>}
+          <RunProgress now={() => (S.current.end ? Math.max(0, Math.min(1, (videoUrl && video.current ? video.current.currentTime - S.current.secStart : S.current.perf.base) / S.current.end)) : 0)}
+            marks={S.current.segs.map((x) => (S.current.end ? x.off / S.current.end : 0))} />
           <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
         </div>
       </div>
 
       {note && <p className="notice flow-note">{note}</p>}
-      {handsFree && heard && <p className="notice heard">🎙 heard: “{heard}”</p>}
+      {handsFree && heard && <p className="notice heard">Heard: “{heard}”</p>}
       {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
       {phase === 'loading' && <p className="notice">Loading the routine…</p>}
 
@@ -921,11 +923,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             </ol>
           ) : null}
           <div className="controls">
-            <button className="primary" onClick={() => begin()}>▶ Start flowing ({speed}×)</button>
-            <button onClick={watch}>👀 Watch it first</button>
+            <button className="primary" onClick={() => begin()}>Start flowing ({speed}×)</button>
+            <button onClick={watch}>Watch it first</button>
             {routine.beat_source === 'music' && (
               <button onClick={() => void syncToMusic()} disabled={speed !== 1 || (syncMsg?.startsWith('Listening') ?? false)} title={speed !== 1 ? 'Mic sync needs 1× (the song plays at normal speed)' : 'Play your own copy of the song; Shadow listens and starts on the beat'}>
-                🎵 Sync to my music
+                Sync to my music
               </button>
             )}
             <label>
@@ -962,8 +964,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             <button onClick={() => { halt(); setPhase('paused') }}>← Back to the fix</button>
           )}
           {phase === 'watching' && S.current.demoBack !== 'paused' && <button onClick={stop}>← Back</button>}
-          {phase !== 'watching' && <button onClick={stop}>■ Stop</button>}
-          {phase === 'flowing' && <button onClick={() => stopFor(null, 'manual')}>❚❚ Pause</button>}
+          {phase !== 'watching' && <button onClick={stop}>Stop</button>}
+          {phase === 'flowing' && <button onClick={() => stopFor(null, 'manual')}>Pause</button>}
         </div>
       )}
 
@@ -977,18 +979,18 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             <div className="mistake-row">
               {pause.m && <canvas ref={snapshot} width={420} height={260} className="snapshot" />}
               <div className={`try ${held ? 'ok' : ''}`}>
-                {held ? <b>✓ That's it! Going again from count 1…</b> : <><b>Now you try:</b> get into the ghost's pose on the camera. Limbs go green when they match, and we'll go again.</>}
+                {held ? <b>That's it! Going again from count 1…</b> : <><b>Now you try:</b> get into the ghost's pose on the camera. Limbs go green when they match, and we'll go again.</>}
               </div>
             </div>
           )}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
-            <button className="primary" onClick={redo}>↻ Redo this 8-count</button>
-            {pause.how && <button onClick={fixIt}>❓ How do I fix it?</button>}
-            {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">🔊 Hear it again</button>}
-            <button onClick={() => demo(pause.seg, pause.count)}>👀 Show me slowly</button>
+            <button className="primary" onClick={redo}>Redo this 8-count</button>
+            {pause.how && <button onClick={fixIt}>How do I fix it?</button>}
+            {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
+            <button onClick={() => demo(pause.seg, pause.count)}>Show me slowly</button>
             <button onClick={skipAhead}>Skip ahead →</button>
-            <button onClick={stop}>■ Stop</button>
+            <button onClick={stop}>Stop</button>
           </div>
         </div>
       )}
@@ -996,7 +998,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {phase === 'done' && summary && (
         <div className="feedback">
           <p className="cue">
-            {summary.passed ? `✓ Step passed at ${speed}×! The next step is unlocked.`
+            {summary.passed ? `Step passed at ${speed}×! The next step is unlocked.`
               : scope === 'step' && summary.pauses > 0 ? `Made it through with ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}. One clean run without a stop passes the step.`
                 : scope === 'step' && summary.relaxed ? 'Clean run! On "way off" it doesn\'t count as a pass. Switch to "noticeably off" to pass the step.'
                   : summary.pauses === 0 ? 'Flawless: straight through without a stop!' : `Made it to the end: ${summary.clean} clean 8-count${summary.clean === 1 ? '' : 's'}, ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}.`}
@@ -1004,8 +1006,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           {summary.trickiest !== null && <p className="notice">Trickiest: 8-count {summary.trickiest + 1}.</p>}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
-            <button className="primary" onClick={() => begin()}>↻ Flow again</button>
-            {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">🔊 Hear it again</button>}
+            <button className="primary" onClick={() => begin()}>Flow again</button>
+            {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
             {mode === 'step' && <button className={summary.passed ? 'primary' : ''} onClick={onNextStep}>Next step →</button>}
             <button onClick={() => { halt(); onExit() }}>Lesson tree</button>
           </div>
@@ -1018,7 +1020,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             <input placeholder={phase === 'paused' ? 'Ask what to change, e.g. "how high should my arm go?"' : 'Ask the coach, e.g. "am I lifting my arm high enough?"'} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={300} />
             {Recognition && (
               <button type="button" className={listening ? 'mic on' : 'mic'} onClick={listen} disabled={asking} title="Ask out loud">
-                {listening ? '● Listening…' : '🎤 Speak'}
+                {listening ? 'Listening…' : 'Speak'}
               </button>
             )}
             <button className="primary" disabled={asking || question.trim().length < 2}>{asking ? 'Thinking…' : 'Ask'}</button>
@@ -1026,14 +1028,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           {coachAnswer && (
             <div className="coach-says">
               <p>
-                🗣️ {coachAnswer.answer}{' '}
-                <button className="link" onClick={() => void speak(coachAnswer.instant && pause?.how ? pause.how.spoken : coachAnswer.answer)} title="Hear it again">🔊</button>
+                {coachAnswer.answer}{' '}
+                <button className="link" onClick={() => void speak(coachAnswer.instant && pause?.how ? pause.how.spoken : coachAnswer.answer)} title="Hear it again">Hear again</button>
               </p>
               {coachAnswer.instant && asking && <span className="notice">The coach is adding tips for you…</span>}
               {more && (
                 <p className="more">
                   <b>More from the coach:</b> {more.answer}{' '}
-                  <button className="link" onClick={() => say(more.answer)} title="Hear it">🔊</button>
+                  <button className="link" onClick={() => say(more.answer)} title="Hear it">Hear it</button>
                 </p>
               )}
               {coachAnswer.actions.length > 0 && <span className="notice">Doing it: {coachAnswer.actions.map(describeAction).join(' → ')}</span>}
@@ -1045,5 +1047,25 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         </div>
       )}
     </section>
+  )
+}
+
+// How far through this run the video is, with a tick at each 8-count. Updates itself every frame.
+function RunProgress({ now, marks }: { now: () => number; marks: number[] }) {
+  const fill = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    let raf = 0
+    const tick = () => {
+      if (fill.current) fill.current.style.width = `${(now() * 100).toFixed(1)}%`
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [now])
+  return (
+    <span className="bar run" aria-label="Progress through this run">
+      <span ref={fill} />
+      {marks.slice(1).map((m, i) => <i key={i} style={{ left: `${m * 100}%` }} />)}
+    </span>
   )
 }

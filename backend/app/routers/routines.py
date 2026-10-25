@@ -79,8 +79,13 @@ def my_usage(user_id: str = User) -> dict:
 @router.get("/routines")
 def list_routines(user_id: str = User) -> list[dict]:
     with _pool().connection() as conn, conn.cursor(row_factory=dict_row) as c:
+        # With learning progress: lesson-tree steps passed (at any speed) out of the total.
         rows = c.execute(
-            "SELECT id, title, status, style, tempo_bpm, created_at FROM routines WHERE user_id = %s ORDER BY created_at DESC LIMIT 50",
+            """SELECT r.id, r.title, r.status, r.style, r.tempo_bpm, r.created_at,
+                      coalesce(jsonb_array_length(r.lesson_plan->'steps'), 0) AS steps_total,
+                      (SELECT count(DISTINCT s.step_index) FROM rep_scores s
+                        WHERE s.routine_id = r.id AND s.user_id = r.user_id AND s.passed) AS steps_passed
+               FROM routines r WHERE r.user_id = %s ORDER BY r.created_at DESC LIMIT 50""",
             (user_id,),
         ).fetchall()
     return [{**r, "id": str(r["id"])} for r in rows]
