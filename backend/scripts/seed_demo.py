@@ -1,12 +1,12 @@
-"""Demo data: a few routines with ~3 weeks of realistic practice, so the app looks like it's in use.
+"""Demo data: six routines with ~6 weeks of realistic practice, so the app looks like it's in use.
 
 Usage (from backend/, with .env loaded):
   python -m scripts.seed_demo            # seed for the account that owns the most routines
   python -m scripts.seed_demo --user ID  # seed for a specific Clerk user id
   python -m scripts.seed_demo --wipe     # remove all demo routines (and their history)
 
-Demo routines are copies of already-processed routines (video, beats, skeletons, moves), named
-"Demo · …". The history goes through the same engine and clustering as real practice: Elo
+Demo routines are copies of already-processed routines (video, beats, skeletons, moves), with
+proper names, flagged is_demo so --wipe never touches real ones. The history goes through the same engine and clustering as real practice: Elo
 mastery per phrase, review schedule, passes at 0.5/0.75/1×, and habits from missed reps.
 """
 import argparse
@@ -18,13 +18,17 @@ import uuid
 from app import db
 from app.coach import clusters, engine
 
-DEMO = "Demo · "
-# title, style, source routine (by title), how far through the plan, practice days, seed
+# title, style, source ("long" = an 8-phrase routine, "short" = a 4-count), how far through the
+# plan, days practised (out of the last 6 weeks), random seed
 PLANS = [
-    ("Contemporary solo", "contemporary", "triasl 3", 0.7, 14, 1),
-    ("Hip-hop groove", "hiphop", "solo_dance", 0.3, 6, 2),
-    ("Quick 4-count", "kpop", "aaditya", 1.0, 4, 3),
+    ("Contemporary Spiral Flow", "contemporary", "long", 1.0, 26, 1),
+    ("Bollywood Thumka Basics", "bollywood", "long", 0.8, 18, 2),
+    ("Hip-Hop Bounce & Hit", "hiphop", "long", 0.45, 10, 3),
+    ("K-Pop Chorus Point", "kpop", "short", 1.0, 7, 4),
+    ("Street Jazz Warm-Up", "hiphop", "short", 1.0, 5, 5),
+    ("Bharatanatyam Adavu Drill", "bharatanatyam", "long", 0.15, 3, 6),
 ]
+WINDOW_DAYS = 42
 # Missed reps lean towards a couple of habits, so clustering finds them.
 HABITS = [
     ({"type": "shape", "body_part": "right_arm", "direction": "higher", "count": 3}, 0.45),
@@ -34,25 +38,30 @@ HABITS = [
 
 
 def wipe(c, user_id: str | None) -> int:
-    q = "SELECT id FROM routines WHERE title LIKE %s" + (" AND user_id = %s" if user_id else "")
-    ids = [r[0] for r in c.execute(q, (DEMO + "%",) + ((user_id,) if user_id else ())).fetchall()]
+    q = "SELECT id FROM routines WHERE is_demo" + (" AND user_id = %s" if user_id else "")
+    ids = [r[0] for r in c.execute(q, (user_id,) if user_id else ()).fetchall()]
     for t in ("rep_scores", "sessions", "ec_mastery", "error_clusters"):
         c.execute(f"DELETE FROM {t} WHERE routine_id = ANY(%s)", (ids,))
     c.execute("DELETE FROM routines WHERE id = ANY(%s)", (ids,))
     return len(ids)
 
 
-def copy_routine(c, src_title: str, user_id: str, title: str, style: str) -> tuple[str, dict, dict, int] | None:
-    src = c.execute("SELECT id FROM routines WHERE title = %s AND status = 'ready' ORDER BY created_at LIMIT 1", (src_title,)).fetchone()
+def copy_routine(c, kind: str, user_id: str, title: str, style: str) -> tuple[str, dict, dict, int] | None:
+    # A processed real routine to copy: the one with the most phrases ("long") or a single 4-count ("short").
+    src = c.execute(
+        """SELECT r.id FROM routines r JOIN eight_counts e ON e.routine_id = r.id
+           WHERE NOT r.is_demo AND r.status = 'ready' AND r.video IS NOT NULL GROUP BY r.id, r.created_at
+           HAVING (%s = 'short' AND count(*) = 1 AND max(cardinality(e.count_times)) = 4) OR (%s = 'long' AND count(*) >= 4)
+           ORDER BY count(*) DESC, r.created_at LIMIT 1""", (kind, kind)).fetchone()
     if not src:
         return None
     rid = c.execute(
         """INSERT INTO routines (user_id, title, status, style, tempo_bpm, beats, downbeats, fingerprint, lesson_plan, duration_s,
-                                 beat_source, video, stages, created_at)
+                                 beat_source, video, stages, created_at, is_demo)
            SELECT %s, %s, 'ready', %s, tempo_bpm, beats, downbeats, fingerprint, lesson_plan, duration_s, beat_source, video, stages,
-                  now() - interval '22 days'
+                  now() - make_interval(days => %s), true
            FROM routines WHERE id = %s RETURNING id, lesson_plan""",
-        (user_id, DEMO + title, style, src[0])).fetchone()
+        (user_id, title, style, WINDOW_DAYS + 1, src[0])).fetchone()
     c.execute(
         """INSERT INTO eight_counts (routine_id, idx, start_s, end_s, count_times, repeat_of, key_moments, difficulty, reference, moves, name)
            SELECT %s, idx, start_s, end_s, count_times, repeat_of, key_moments, difficulty, reference, moves, name
@@ -64,7 +73,7 @@ def copy_routine(c, src_title: str, user_id: str, title: str, style: str) -> tup
 
 
 def simulate(plan: dict, reach: float, days: int, rng: random.Random, counts: int = 8) -> list[dict]:
-    """Reps over the last ~3 weeks: skill per step grows with practice; passing unlocks the next step
+    """Reps over the last ~6 weeks: skill per step grows with practice; passing unlocks the next step
     and earns faster speeds; misses carry a (mostly habitual) fault."""
     steps = plan.get("steps", [])
     target = max(1, round(reach * len(steps)))
@@ -73,7 +82,10 @@ def simulate(plan: dict, reach: float, days: int, rng: random.Random, counts: in
     best = [0.0 for _ in steps]
     reps: list[dict] = []
     today = dt.datetime.now(dt.timezone.utc).replace(minute=0, second=0, microsecond=0)
-    day_list = sorted(rng.sample(range(1, 21), k=min(days - 1, 20)), reverse=True) + [0]  # always ends today
+    # Practice days spread over the window, with the last few in a row (a live streak) for busy routines.
+    recent = [3, 2, 1] if days >= 10 else []
+    pool = [d for d in range(4, WINDOW_DAYS) if d not in recent]
+    day_list = sorted(rng.sample(pool, k=min(max(0, days - 1 - len(recent)), len(pool))), reverse=True) + recent + [0]
     cur = 0
     for d in day_list:
         t = today - dt.timedelta(days=d) + dt.timedelta(hours=rng.randint(-4, 3))
@@ -121,9 +133,12 @@ def simulate(plan: dict, reach: float, days: int, rng: random.Random, counts: in
 
 def seed(c, user_id: str) -> None:
     for title, style, src, reach, days, seed_n in PLANS:
+        if c.execute("SELECT 1 FROM routines WHERE user_id = %s AND lower(title) = lower(%s)", (user_id, title)).fetchone():
+            print(f"skip {title}: name already used")
+            continue
         made = copy_routine(c, src, user_id, title, style)
         if not made:
-            print(f"skip {title}: source routine '{src}' not found")
+            print(f"skip {title}: no {src} routine to copy")
             continue
         rid, plan, diffs, counts = made
         reps = simulate(plan, reach, days, random.Random(seed_n), counts)
@@ -154,7 +169,7 @@ def seed(c, user_id: str) -> None:
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, '{}')""",
                 (user_id, rid, k, h["label"], h["body_part"], h["count"], h["share"], json.dumps(h["fault"])))
         passed_steps = len({r["step"] for r in reps if r["passed"]})
-        print(f"{DEMO}{title}: {len(reps)} reps over {days} days, {passed_steps}/{len(plan.get('steps', []))} steps passed, "
+        print(f"{title}: {len(reps)} reps over {days} days, {passed_steps}/{len(plan.get('steps', []))} steps passed, "
               f"{len(found)} habit(s): {[h['label'] for h in found]}")
 
 
@@ -166,8 +181,7 @@ if __name__ == "__main__":
     db.open_pool()
     with db.pool.connection() as c:
         user = a.user or c.execute(
-            "SELECT user_id FROM routines WHERE user_id <> 'test-user' AND title NOT LIKE %s GROUP BY user_id ORDER BY count(*) DESC LIMIT 1",
-            (DEMO + "%",)).fetchone()[0]
+            "SELECT user_id FROM routines WHERE user_id <> 'test-user' AND NOT is_demo GROUP BY user_id ORDER BY count(*) DESC LIMIT 1").fetchone()[0]
         n = wipe(c, user)
         if n:
             print(f"removed {n} demo routine(s)")

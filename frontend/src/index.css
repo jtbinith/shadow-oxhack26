@@ -345,3 +345,12 @@ button.primary:hover:not(:disabled), .card button.primary:hover:not(:disabled), 
 .routine-table td { vertical-align: middle; }
 .routine-table .routine-progress { flex-basis: auto; min-width: 9rem; }
 td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-weight: 800; } td.bronze { color: #9a5a22; font-weight: 800; }
+/* Top-bar links: a light shimmer sweeps across on hover, and they press in on click */
+.topnav .navlink { position: relative; overflow: hidden; transition: transform 0.08s ease, background 0.15s ease, color 0.15s ease; }
+.topnav .navlink::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-120%); pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.55) 50%, transparent 80%);
+}
+.topnav .navlink:hover::after { animation: shimmer 0.7s ease; }
+.topnav .navlink:active { transform: scale(0.94); }
+@keyframes shimmer { to { transform: translateX(120%); } }
