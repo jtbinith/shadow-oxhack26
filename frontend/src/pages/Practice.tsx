@@ -77,6 +77,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   // The murder meter: crows gather as the dancing drifts towards the stop threshold.
   const [crows, setCrows] = useState(0)
   const crowsRef = useRef({ n: 0, at: 0 })
+  // Which pause the third crow has landed for (the card's "It's a murder!" waits for it).
+  const [murderFor, setMurderFor] = useState<object | null>(null)
+  const onMurderFull = useCallback(() => setMurderFor(pause), [pause])
   // One crow at a time towards what the pressure calls for.
   const updateCrows = (pressure: number) => {
     const c = crowsRef.current
@@ -1048,7 +1051,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           )}
         </aside>
         <div className="stage-col">
-        <MurderPerch count={phase === 'flowing' ? crows : 0} murder={phase === 'paused' && !!pause?.m} />
+        <MurderPerch count={phase === 'flowing' || (phase === 'paused' && !!pause?.m) ? crows : 0} murder={phase === 'paused' && !!pause?.m} onFull={onMurderFull} />
         <div className="stage">
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
@@ -1136,9 +1139,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
       {phase === 'paused' && pause && (
         <div className="mistake">
-          {pause.m && (
+          {pause.m && murderFor === pause && (
             <div className="murder-title">
-              <Murder count={4} size={40} />
+              <Murder count={3} size={40} />
               <b>It's a murder!</b>
             </div>
           )}

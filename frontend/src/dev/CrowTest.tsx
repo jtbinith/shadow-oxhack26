@@ -30,12 +30,12 @@ function CrowTest() {
     }), 80)
     return () => window.clearInterval(id)
   }, [playing])
-  const murder = pressure >= 1 && crows >= 3
+
   return (
     <section style={{ maxWidth: 900, margin: '2rem auto' }}>
       <h2 style={{ color: '#f2f2f2' }}>Murder meter test</h2>
       <div className="stage-col">
-        <MurderPerch count={murder ? 3 : crows} murder={murder} />
+        <MurderPerch count={crows} murder={pressure >= 1} />
         <div className="stage" style={{ width: '100%', aspectRatio: '16 / 9', background: 'repeating-linear-gradient(45deg,#333 0 20px,#3c3c3c 20px 40px)', display: 'grid', placeItems: 'center', color: '#bbb' }}>
           live camera (never covered)
         </div>
