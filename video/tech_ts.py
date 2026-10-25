@@ -9,7 +9,7 @@ r.raise_for_status(); j = r.json()
 pathlib.Path('public/demo-vo/tech.mp3').write_bytes(base64.b64decode(j['audio_base64']))
 a = j['alignment']; chars = ''.join(a['characters']); starts = a['character_start_times_seconds']
 marks = {}
-for k, phrase in [('browser', 'MediaPipe'), ('backend', 'FastAPI'), ('aist', 'AIST'), ('gemini', 'Gemini'), ('eleven', 'ElevenLabs'), ('tiger', 'Tiger Data'), ('clerk', 'Clerk')]:
+for k, phrase in [('gemini', 'Gemini'), ('eleven', 'ElevenLabs'), ('tiger', 'Tiger Data'), ('clerk', 'Clerk')]:
     i = chars.find(phrase); marks[k] = round(starts[i], 2)
 print(marks)
 pathlib.Path('src/tech_marks.json').write_text(json.dumps(marks))

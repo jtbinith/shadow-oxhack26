@@ -21,7 +21,7 @@
  ],
  [
   "tracking",
-  "Even in a busy room, it keeps coaching you. Everyone in frame gets a fingerprint: a 512-number embedding from an OSNet model off Hugging Face, running in your browser, plus clothing colour and position. Walk past, swap places, or step out and back, and Shadow still knows who you are."
+  "Even in a busy room, it keeps coaching you. Everyone gets an OSNet fingerprint from Hugging Face, so Shadow always knows which one is you."
  ],
  [
   "crows",
@@ -41,7 +41,7 @@
  ],
  [
   "tech",
-  "Under the hood, MediaPipe tracks you in the browser, so your video never leaves your device. A FastAPI backend runs the upload pipeline and learning engine, with scoring tested against the AIST++ dance dataset. Gemini plans and coaches, ElevenLabs speaks, Tiger Data stores every rep as time series, and Clerk keeps it yours."
+  "Built with four sponsors: Gemini plans and coaches, ElevenLabs gives it a voice, Tiger Data stores every rep as time series, and Clerk keeps your data yours."
  ],
  [
   "outro",

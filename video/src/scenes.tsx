@@ -66,9 +66,9 @@ export function Problem() {
           </Pop>
         ))}
       </div>
-      <Pop at={110} style={{ position: 'absolute', bottom: 150, display: 'flex', alignItems: 'center', gap: 28 }}>
+      <Pop at={70} style={{ position: "absolute", bottom: 150, display: 'flex', alignItems: 'center', gap: 28 }}>
         <div style={{ color: C.paper }}><Crow size={100} pose="caw" inverse /></div>
-        <div style={{ color: C.paper, fontWeight: 700, fontSize: 56 }}>Nobody tells you what's wrong on <u>this</u> attempt.</div>
+        <div style={{ color: C.paper, fontWeight: 700, fontSize: 56 }}>Nobody tells you what's wrong with your moves.</div>
       </Pop>
     </Page>
   )
