@@ -30,7 +30,7 @@ export default function Processing({ routine }: { routine: Routine }) {
           const state = done.has(s.stage) ? 'done' : s === next ? 'active' : 'todo'
           return (
             <li key={s.stage} className={state}>
-              <span className="tick">{state === 'done' ? 'Done' : state === 'active' ? '…' : ''}</span>
+              <span className="tick">{state === 'done' ? <svg viewBox="0 0 24 24" width="16" height="16" aria-label="Done"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg> : state === 'active' ? '…' : ''}</span>
               {s.label}
               {extra}
               {state === 'active' && s.stage === 'pose' && progress ? ` (${progress.percent}%)` : ''}
