@@ -512,3 +512,7 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 .perch-msg::after { display: none; }
 .murder-perch.murder .perch-msg { border: 0; background: var(--halt); color: #fff; }
 .murder-perch.murder .perch-msg::before { background: var(--halt); left: -5px; bottom: -8px; width: 17px; height: 12px; }
+/* Tail: an equilateral triangle pointing down-left at 45° from the bubble's bottom-left corner */
+.perch-msg::before { width: 14px; height: 12.1px; left: -3px; bottom: -5px; clip-path: polygon(50% 0, 100% 100%, 0 100%); transform: rotate(-135deg); }
+.murder-perch.murder .perch-msg::before { width: 16px; height: 13.9px; left: -4px; bottom: -6px; }
+.perch-msg { margin-bottom: 15px; } /* 5px higher */
