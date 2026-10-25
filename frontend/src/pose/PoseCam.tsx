@@ -179,6 +179,9 @@ export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame)
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState('Starting camera…')
   const [perf, setPerf] = useState('')
+  // Technical readout (fps, timings) and tuning buttons: hidden unless asked for; remembered.
+  const [metrics, setMetrics] = useState(() => localStorage.getItem('shadow.metrics') === 'on')
+  useEffect(() => localStorage.setItem('shadow.metrics', metrics ? 'on' : 'off'), [metrics])
   const [quality, setQuality] = useState<PoseQuality>('fast')
   const [focus, setFocus] = useState(true)
   // The person being coached. Kept across model changes; follows their identity, not their position.
@@ -495,7 +498,18 @@ export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame)
       <video ref={video} playsInline muted />
       <canvas ref={canvas} />
       {status && <p className="notice">{status}</p>}
-      {perf && <p className="perf">{perf}</p>}
+      {metrics && perf && <p className="perf">{perf}</p>}
+      <button
+        className="quality metrics-toggle"
+        onClick={(e) => {
+          e.stopPropagation()
+          setMetrics((m) => !m)
+        }}
+        aria-pressed={metrics}
+      >
+        Metrics: {metrics ? 'on' : 'off'}
+      </button>
+      {metrics && (<>
       <button
         className="quality"
         onClick={(e) => {
@@ -514,6 +528,7 @@ export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame)
       >
         Focus: {focus ? 'on' : 'off'}
       </button>
+      </>)}
     </div>
   )
 }

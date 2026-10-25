@@ -1,3 +1,4 @@
+@font-face { font-family: 'Yikes'; src: url('/fonts/Yikes.woff2') format('woff2'); font-display: swap; } /* Yikes! by W. A. Montgomery, freeware */
 /* Retro monochrome: white windows with black outlines and hard shadows on a halftone page. */
 :root {
   color-scheme: light;
@@ -29,7 +30,7 @@ main > header {
   background: var(--chrome); border-bottom: var(--line); padding: 0.35rem 1.5rem; box-sizing: border-box;
   width: 100vw; margin: 0 0 1.4rem calc(50% - 50vw);
 }
-.logo { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-size: 1.35rem; margin: 0; }
+.logo { cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-family: 'Yikes', 'Baloo 2', system-ui; font-weight: 400; font-size: 1.7rem; letter-spacing: 0.02em; margin: 0; }
 .logo::before {
   content: ''; width: 26px; height: 26px; border: var(--line); border-radius: 6px; background: var(--paper);
   background-image: radial-gradient(circle at 50% 42%, var(--ink) 4px, transparent 4.5px), linear-gradient(var(--ink), var(--ink));
@@ -81,6 +82,7 @@ input, select, textarea { font-family: inherit; }
 .perf { position: absolute; left: 0.6rem; bottom: 0.5rem; margin: 0; font: 600 0.8rem ui-monospace, monospace; padding: 0.15rem 0.45rem; }
 .quality { position: absolute; right: 0.6rem; bottom: 0.5rem; font: 700 0.8rem 'Baloo 2', system-ui; cursor: pointer; padding: 0.2rem 0.55rem; }
 .focus-toggle { right: 10.5rem; }
+.metrics-toggle { top: 0.5rem; bottom: auto !important; right: 0.6rem; }
 
 /* Home */
 .home { display: grid; grid-template-columns: 3fr 2fr; gap: 1.8rem; margin-top: 0.5rem; align-items: start; }
