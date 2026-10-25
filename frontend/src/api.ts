@@ -29,6 +29,12 @@ export type Routine = {
   created_at: string
 }
 
+/** "4-count 2" / "8-count 3": phrases are 8 counts, or 4 for a short routine or a leftover bar. */
+export function phraseName(r: Routine, idx: number): string {
+  const n = r.eight_counts.find((e) => e.idx === idx)?.count_times.length ?? 8
+  return `${n}-count ${idx + 1}`
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useApi, type Routine } from '../api'
+import { phraseName, useApi, type Routine } from '../api'
 
 type Stats = {
   totals: { reps: number; passes: number; avg_score: number | null; best_score: number | null; timing_bias_ms: number | null; minutes: number | null }
@@ -26,7 +26,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
   const recent = [...s.recent].reverse()
   const label = (i: number) => {
     const st = steps[i]
-    return st ? (st.type === 'chain' ? `Checkpoint ${st.eight_counts.map((x) => x + 1).join('+')}` : `8-count ${st.eight_counts[0] + 1}`) : `Step ${i + 1}`
+    return st ? (st.type === 'chain' ? `Checkpoint ${st.eight_counts.map((x) => x + 1).join('+')}` : phraseName(routine, st.eight_counts[0])) : `Step ${i + 1}`
   }
   return (
     <section className="progress">
@@ -75,7 +75,7 @@ export default function Progress({ routine, back, practise }: { routine: Routine
         <div className="card">
           <h3>Move mastery</h3>
           <table>
-            <thead><tr><th>8-count</th><th>Rating</th><th>Tier</th><th>Reps</th><th>Review</th></tr></thead>
+            <thead><tr><th>Phrase</th><th>Rating</th><th>Tier</th><th>Reps</th><th>Review</th></tr></thead>
             <tbody>
               {s.mastery.map((m) => (
                 <tr key={m.idx}>

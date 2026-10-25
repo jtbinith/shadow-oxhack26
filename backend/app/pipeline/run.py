@@ -59,7 +59,11 @@ def process(routine_id: str, upload: Path, user_id: str) -> None:
 
         norm = features.normalise(raw["image"], raw["width"], raw["height"])
         world = features.fill_gaps(raw["world"])
-        counts = audio.eight_counts(grid["downbeats"], info["duration"])
+        if grid["source"] == "default":
+            # No music: take the beat from the movement itself.
+            grid = audio.motion_grid(features.limb_speed(norm, raw["fps"]), raw["fps"], info["duration"])
+            _stage(routine_id, "beats", tempo=round(grid["tempo"]), source=grid["source"])
+        counts = audio.eight_counts(grid["beats"], grid["downbeats"], info["duration"], grid.get("end"))
         analysed = segment.analyse(norm, raw["fps"], counts)
         for e in analysed:
             e["moves"] = moves.name_counts(norm, raw["fps"], e)

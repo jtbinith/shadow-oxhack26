@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
 import { useAuth } from '@clerk/clerk-react'
-import { useApi, type Routine, type Step } from '../api'
+import { phraseName, useApi, type Routine, type Step } from '../api'
 import { BONES, angle, boneDirs, normaliseFrame, refFrame, refFrameDisplay, scoreRep, type Frame, type RefData, type UserSample } from '../coach/score'
 import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
@@ -39,9 +39,9 @@ const SPEEDS = [0.25, 0.5, 0.75, 1]
 const describeAction = (a: Action): string =>
   a.type === 'speed' ? `${a.speed}×`
     : a.type === 'strictness' ? `${a.level} stops`
-      : a.type === 'demo' ? `demo${a.eight_count ? ` 8-count ${a.eight_count}` : ''}${a.count ? ` count ${a.count}` : ''}`
+      : a.type === 'demo' ? `demo${a.eight_count ? ` part ${a.eight_count}` : ''}${a.count ? ` count ${a.count}` : ''}`
         : a.type === 'show_pose' ? `match the pose${a.count ? ` on ${a.count}` : ''}`
-          : a.type === 'goto' ? `go to 8-count ${a.eight_count}`
+          : a.type === 'goto' ? `go to part ${a.eight_count}`
             : a.type === 'continue' ? 'carry on' : a.type === 'repeat_voice' ? 'say it again' : a.type
 const LOST_AFTER_S = 2.5
 const HOLD_S = 0.8
@@ -333,14 +333,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const k = st.seg
     const seg = st.segs[k]
     const local = (m?.t ?? now()) - (seg?.off ?? 0)
-    const count = Math.min(8, Math.max(1, seg?.ref.counts.filter((c) => c <= local + 0.05).length ?? 1))
+    const count = Math.min(seg?.ref.counts.length ?? 8, Math.max(1, seg?.ref.counts.filter((c) => c <= local + 0.05).length ?? 1))
     if (why === 'lost') {
       st.target = null
       setPause({ m: null, seg: k, count, headline: 'I lost you', fixes: ["Step back so your whole body is in the frame, then we'll go again."], lost: true })
       void say("I lost you. Step back into the frame and we'll go again.")
     } else if (why === 'manual' || !m) {
       st.target = null
-      setPause({ m: null, seg: k, count, headline: 'Paused', fixes: ['Take a breath. Redo this 8-count or skip ahead when you are ready.'] })
+      setPause({ m: null, seg: k, count, headline: 'Paused', fixes: ['Take a breath. Go again or skip ahead when you are ready.'] })
     } else {
       st.stats.pauses++
       st.pausesAt.set(k, (st.pausesAt.get(k) ?? 0) + 1)
@@ -368,7 +368,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       st.speed = slower
       st.slowed = true
       setSpeed(slower)
-      setNote(`Second stop here, so this 8-count goes at ${slower}×. Back up to speed after it.`)
+      setNote(`Second stop here, so this part goes at ${slower}×. Back up to speed after it.`)
     }
     setCoachAnswer(null)
     setMore(null)
@@ -378,7 +378,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   // Once the learner matches the target pose: say so and go again automatically.
   useEffect(() => {
     if (!held || phase !== 'paused') return
-    void say("That's it! Again from the top of this 8-count.")
+    void say("That's it! Again from count 1.")
     const id = window.setTimeout(redo, 1800)
     return () => window.clearTimeout(id)
   }, [held, phase, redo, say])
@@ -446,9 +446,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const c = st.all.counts.filter((x) => x <= t).length - 1
     if (c !== st.lastCount && c >= 0) {
       st.lastCount = c
-      if (!st.music && ac.current) click(ac.current, ac.current.currentTime, c % 8 === 0)
       const seg = st.segs[k]
       const local = seg ? seg.ref.counts.filter((x) => x <= t - seg.off + 1e-6).length - 1 : 0
+      if (!st.music && ac.current) click(ac.current, ac.current.currentTime, local === 0)
       setCalling({ seg: k, count: local + 1, name: seg?.names[local] ?? '' })
     }
     if (!frame) {
@@ -701,7 +701,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     else if (move.type === 'goto' || move.type === 'demo' || move.type === 'show_pose') {
       const k = segFor(move.eight_count)
       if (k < 0) {
-        void say(`8-count ${move.eight_count} isn't in this practice. Pick it on the lesson tree.`)
+        void say(`That part isn't in this practice. Pick it on the lesson tree.`)
         return
       }
       if (move.type === 'goto') flowFrom(st.segs[k].off)
@@ -866,8 +866,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   }, [handsFree, Recognition, speak])
 
   const title = mode === 'routine' ? 'The whole routine'
-    : scope === 'step' ? (step.type === 'chain' ? `Checkpoint: 8-counts ${step.eight_counts.map((i) => i + 1).join('+')}` : `8-count ${startIdx + 1}`)
-      : `From 8-count ${startIdx + 1} to the end`
+    : scope === 'step' ? (step.type === 'chain' ? `Checkpoint: ${step.eight_counts.map((i) => i + 1).join('+')}` : phraseName(routine, startIdx))
+      : `From ${phraseName(routine, startIdx)} to the end`
   const firstMoves = routine.eight_counts.find((e) => e.idx === startIdx)?.moves
   const segNo = (k: number) => (S.current.segs[k]?.idx ?? 0) + 1
 
@@ -928,7 +928,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
-          {phase === 'flowing' && <div className="recording">Flowing · 8-count {segNo(calling?.seg ?? S.current.seg)}</div>}
+          {phase === 'flowing' && <div className="recording">Flowing · {phraseName(routine, segNo(calling?.seg ?? S.current.seg) - 1)}</div>}
           {phase === 'paused' && <div className="recording paused">Paused</div>}
           {phase === 'flowing' && calling && (
             <div className="caller">
@@ -981,14 +981,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             <label>
               Flow{' '}
               <select value={scope} onChange={(e) => setScope(e.target.value as 'end' | 'step')}>
-                <option value="step">{mode === 'routine' ? 'just the first 8-count' : 'just this step'}</option>
+                <option value="step">{mode === 'routine' ? 'just the first phrase' : 'just this step'}</option>
                 <option value="end">{mode === 'routine' ? 'the whole routine' : 'from here to the end'}</option>
               </select>
             </label>
           </div>
           <span className="notice">{scope === 'step'
             ? 'Dance this step with the video. I stop you only when something is noticeably off, show the fix, let you try it, then go again. One clean run with no stops passes the step.'
-            : 'One continuous run with the video. I stop you only when something is noticeably off, show the fix, then we go again from that 8-count and on past it.'}</span>
+            : 'One continuous run with the video. I stop you only when something is noticeably off, show the fix, then we go again from that part and on past it.'}</span>
         </>
       )}
 
@@ -1005,7 +1005,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
       {phase === 'paused' && pause && (
         <div className="mistake">
-          <h3>{pause.headline}{!pause.lost && <span className="notice"> · 8-count {segNo(pause.seg)}</span>}</h3>
+          <h3>{pause.headline}{!pause.lost && <span className="notice"> · {phraseName(routine, segNo(pause.seg) - 1)}</span>}</h3>
           <ul className="fixes">
             {pause.fixes.map((f, i) => <li key={i}>{f}</li>)}
           </ul>
@@ -1019,7 +1019,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           )}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
-            <button className="primary" onClick={redo}>Redo this 8-count</button>
+            <button className="primary" onClick={redo}>Go again from count 1</button>
             {pause.how && <button onClick={fixIt}>How do I fix it?</button>}
             {lastSaid && <button onClick={() => void speak(lastSaid)} title="Hear the coach again">Hear it again</button>}
             <button onClick={() => demo(pause.seg, pause.count)}>Show me slowly</button>
@@ -1035,9 +1035,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             {summary.passed ? `Step passed at ${speed}×! The next step is unlocked.`
               : scope === 'step' && summary.pauses > 0 ? `Made it through with ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}. One clean run without a stop passes the step.`
                 : scope === 'step' && summary.relaxed ? 'Clean run! On "way off" it doesn\'t count as a pass. Switch to "noticeably off" to pass the step.'
-                  : summary.pauses === 0 ? 'Flawless: straight through without a stop!' : `Made it to the end: ${summary.clean} clean 8-count${summary.clean === 1 ? '' : 's'}, ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}.`}
+                  : summary.pauses === 0 ? 'Flawless: straight through without a stop!' : `Made it to the end: ${summary.clean} clean phrase${summary.clean === 1 ? '' : 's'}, ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}.`}
           </p>
-          {summary.trickiest !== null && <p className="notice">Trickiest: 8-count {summary.trickiest + 1}.</p>}
+          {summary.trickiest !== null && <p className="notice">Trickiest: {phraseName(routine, summary.trickiest)}.</p>}
           {habit && <p className="habit">Pattern across your reps: <b>{habit}</b></p>}
           <div className="controls">
             <button className="primary" onClick={() => begin()}>Flow again</button>

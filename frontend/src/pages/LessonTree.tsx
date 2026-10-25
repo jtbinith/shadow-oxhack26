@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useApi, type Routine, type Step } from '../api'
+import { phraseName, useApi, type Routine, type Step } from '../api'
 
 type Progress = { steps: { index: number; best_speed: number | null; unlocked: boolean }[] }
 
@@ -9,9 +9,9 @@ const TIERS = [
   { speed: 1, name: 'gold' },
 ]
 
-function label(step: Step) {
+function label(routine: Routine, step: Step) {
   const n = step.eight_counts.map((i) => i + 1)
-  return step.type === 'chain' ? `Checkpoint ${n.join('+')}` : `8-count ${n[0]}`
+  return step.type === 'chain' ? `Checkpoint ${n.join('+')}` : phraseName(routine, step.eight_counts[0])
 }
 
 function moveName(routine: Routine, step: Step) {
@@ -59,7 +59,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
         <button className="link back" onClick={back}>← My routines</button>
         <h2>{routine.title}</h2>
         <p className="notice">
-          {Math.round(routine.tempo_bpm ?? 0)} BPM · {routine.eight_counts.length} eight-counts
+          {Math.round(routine.tempo_bpm ?? 0)} BPM · {routine.eight_counts.length} {routine.eight_counts.every((e) => e.count_times.length === 4) ? 'four' : 'eight'}-count{routine.eight_counts.length === 1 ? '' : 's'}
           {repeats.length ? ` · ${repeats.length} repeat${repeats.length > 1 ? 's' : ''} learnt once` : ''}
           {routine.lesson_plan.source === 'gemini' ? ' · plan by Gemini' : ''}
         </p>
@@ -95,7 +95,7 @@ export default function LessonTree({ routine, back, practise, flowAll, showProgr
           return (
             <li key={i} className={`node ${s.type} ${locked ? 'locked' : 'open'}`} style={{ marginLeft: `${(Math.sin(i * 0.9) + 1) * 22}%` }}>
               <button disabled={locked} onClick={() => practise(i)} title={locked ? 'Pass the step before to unlock' : 'Practise'}>
-                <span className="node-label">{label(s)}</span>
+                <span className="node-label">{label(routine, s)}</span>
                 {s.type === 'learn' && moveName(routine, s) && <span className="node-moves">{moveName(routine, s)}</span>}
                 <span className="tiers">
                   {TIERS.map((t) => (

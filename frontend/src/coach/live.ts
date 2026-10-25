@@ -273,6 +273,6 @@ export function howTo(m: Mistake, count: number): { steps: string[]; spoken: str
   if (m.lag < -0.28 || m.kind === 'late') steps.push(`Count out loud and arrive in the shape ON "${count}", not after it. Start moving on the count before.`)
   else if (m.lag > 0.12 || m.kind === 'early') steps.push(`Hold the shape before a touch longer, then move as "${count}" lands.`)
   if (m.kind === 'small' || (m.speedRatio !== null && m.speedRatio < 0.6)) steps.push('Go to full stretch on every move and snap into each shape. Bigger than feels natural.')
-  steps.push(`Then we redo this 8-count from count 1. Think "${m.kind === 'shape' ? `${m.part} ${d.replace(/^(much|a touch) /, '')}` : m.kind === 'late' ? 'early' : m.kind === 'early' ? 'wait' : 'bigger'}" on ${count}.`)
+  steps.push(`Then we go again from count 1. Think "${m.kind === 'shape' ? `${m.part} ${d.replace(/^(much|a touch) /, '')}` : m.kind === 'late' ? 'early' : m.kind === 'early' ? 'wait' : 'bigger'}" on ${count}.`)
   return { steps, spoken: steps.slice(0, 3).join(' ') }
 }

@@ -82,7 +82,7 @@ def key_moments(seg_speed: np.ndarray, fps: float, c: dict) -> list[dict]:
     s = np.nan_to_num(seg_speed)
     thresh = s.mean() + s.std()
     moments = []
-    beat = (c["end"] - c["start"]) / 8
+    beat = (c["end"] - c["start"]) / max(1, len(c["counts"]))
     for k in range(1, len(s) - 3):
         if s[k] > thresh and s[k] >= s[k - 1] and s[k] >= s[k + 1] and s[k + 3] < 0.5 * s[k]:
             t = c["start"] + k / fps
