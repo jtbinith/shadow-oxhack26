@@ -521,11 +521,11 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* The little brand note under the hero text: shadow, crows, murder */
 .intro p.lore, .hero p.lore { font-size: 0.95rem; font-style: italic; color: #555; margin-top: 0.7rem; max-width: 52ch; }
 /* The brand note sits in a blue-bordered box with a faint blue fill */
-.intro p.lore, .hero p.lore { display: block; width: fit-content; font-style: italic; color: var(--ink); background: rgba(43, 108, 255, 0.1); border: 2px solid var(--cta); border-radius: 10px; padding: 0.5rem 0.8rem; margin: 0.9rem 0 1.4rem; max-width: 52ch; }
+.intro p.lore, .hero p.lore { display: block; width: fit-content; font-style: italic; color: var(--ink); background: rgba(43, 108, 255, 0.1); border: 2px solid var(--cta); border-radius: 10px; padding: 0.5rem 0.8rem; margin: 0.9rem 0 1.4rem; max-width: 38ch; }
 .lore mark { background: none; color: inherit; padding: 0; }
 /* Three dancing crows in the empty top-right of the hero */
 .intro, .hero { position: relative; }
-.dancing-crows { position: absolute; top: 2.2rem; right: 2.4rem; display: flex; align-items: flex-end; gap: 0.9rem; pointer-events: none; }
+.dancing-crows { position: absolute; bottom: 2rem; right: 2.2rem; display: flex; align-items: flex-end; gap: 0.5rem; pointer-events: none; }
 .dancer { display: inline-block; transform-origin: 50% 100%; }
 .dancer.sway-l { animation: crow-sway 2s ease-in-out infinite; }
 .dancer.sway-r { animation: crow-sway 2s ease-in-out infinite reverse; }
