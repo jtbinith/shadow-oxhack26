@@ -161,7 +161,7 @@ span.chip { cursor: default; }
 .counts-list h3 .notice { font-size: 0.95rem; font-weight: 500; margin-left: 0.4rem; }
 .movelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
 .movelist li { display: flex; align-items: stretch; background: var(--paper); border: var(--line); box-shadow: 3px 3px 0 var(--edge); }
-.count-no { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 3.2rem; background: var(--ink); color: var(--paper); font-size: 1.6rem; font-weight: 800; line-height: 1; padding: 0.35rem 0.3rem; }
+.count-no { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 3.2rem; background: var(--chrome); color: var(--ink); border-right: var(--line); font-size: 1.6rem; font-weight: 800; line-height: 1; padding: 0.35rem 0.3rem; }
 .count-no small { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.8; margin-bottom: 0.15rem; }
 .count-move { padding: 0.45rem 0.6rem; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem; margin: 1rem 0; }
