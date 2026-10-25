@@ -439,3 +439,4 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* The lesson-plan window is a <header>: don't let the generic header row layout apply to it. */
 .tree-head { display: block; }
 .tree-head .tree-actions { justify-content: flex-start; }
+.cp-best { font-size: 0.72rem; font-weight: 700; opacity: 0.75; }

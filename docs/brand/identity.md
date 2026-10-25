@@ -30,7 +30,6 @@ exactly what to fix.
   - red `#d64545` stop / pause
   - blue `#2b6cff` the main call to action
   - the ghost's limbs: green (matching), amber (close), red (off)
-  - medals: bronze, silver, gold
 
 ## Voice
 Short, warm, specific, a little cheeky ("Callum" hype voice, "Laura" calm voice).
