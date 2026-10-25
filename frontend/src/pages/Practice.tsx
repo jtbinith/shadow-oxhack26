@@ -7,7 +7,7 @@ import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
 import { MistakeDetector, THRESHOLDS, describe, holding, howTo, type Mistake, type Sensitivity } from '../coach/live'
 import { anchor, drawArrow, drawBodyGhost, drawPose, fitAt } from '../coach/draw'
-import { click, makeSpeak, speakFallback } from '../coach/voice'
+import { click, isSpeaking, makeSpeak, speakFallback, stopVoice } from '../coach/voice'
 import { parseCommand, type Action } from '../coach/commands'
 import QuickLink from '../QuickLink'
 import { styleCue, styleFor } from '../coach/styles'
@@ -276,22 +276,40 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     setHeld(false)
     setSummary(null)
     const beat = ((all.counts[1] - all.counts[0]) || 0.5) / st.speed
-    const t0 = audio.currentTime + lead
-    ;['5', '6', '7', '8'].forEach((n, k) => {
-      if (!music) click(audio, t0 + k * beat, k === 0)
+    const countIn = () => {
+      const t0 = audio.currentTime + lead
+      ;['5', '6', '7', '8'].forEach((n, k) => {
+        if (!music) click(audio, t0 + k * beat, k === 0)
+        st.timers.push(window.setTimeout(() => {
+          setCountLabel(n)
+          speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
+        }, (lead + k * beat) * 1000))
+      })
       st.timers.push(window.setTimeout(() => {
-        setCountLabel(n)
-        speakFallback(n, 1.3) // counts must land on the beat; no network in the loop
-      }, (lead + k * beat) * 1000))
-    })
+        setCountLabel('')
+        // No mistakes are called in the first 2 counts after (re)starting: find the groove.
+        st.detector?.reset(from + ((all.counts[1] - all.counts[0]) || 0.5) * 2)
+        play()
+        setPhase('flowing')
+      }, (lead + 4 * beat) * 1000))
+    }
     setPhase('countin')
-    st.timers.push(window.setTimeout(() => {
-      setCountLabel('')
-      // No mistakes are called in the first 2 counts after (re)starting: find the groove.
-      st.detector?.reset(from + ((all.counts[1] - all.counts[0]) || 0.5) * 2)
-      play()
-      setPhase('flowing')
-    }, (lead + 4 * beat) * 1000))
+    if (music) {
+      // Their own song sets the timing: the count-in can't wait, so the coach stops talking.
+      stopVoice()
+      countIn()
+      return
+    }
+    // One voice at a time: let the coach finish its sentence before counting in (at most 8 s).
+    const giveUpAt = performance.now() + 8000
+    const whenQuiet = () => {
+      if (isSpeaking() && performance.now() < giveUpAt) {
+        st.timers.push(window.setTimeout(whenQuiet, 150))
+        return
+      }
+      countIn()
+    }
+    whenQuiet()
   }, [halt, play, seek])
 
   // ---- record an 8-count as a rep (feeds mastery, habits and the coach) ----

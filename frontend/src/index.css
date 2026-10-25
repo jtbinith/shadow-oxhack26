@@ -266,3 +266,14 @@ th { border-bottom: var(--line); }
 .quicklink.primary { background: var(--ink); color: var(--paper); }
 .practice-head .quicklink.back, .controls .quicklink, .tree-actions .quicklink { margin: 0; }
 .title.invalid { border-color: #b00020; }
+
+/* Hover: every button visibly changes colour (grey ↔ black), plus a clear keyboard focus ring */
+button.primary:hover:not(:disabled), .card button.primary:hover:not(:disabled), .mistake button.primary:hover:not(:disabled),
+.feedback button.primary:hover:not(:disabled), .askpanel button.primary:hover:not(:disabled), .quicklink.primary:hover { background: var(--chrome); color: var(--ink); }
+.controls button:not(.primary):hover:not(:disabled), .chip:not(span):hover, .ask button:not(.primary):hover:not(:disabled),
+.replan button:hover:not(:disabled), button.icon:hover:not(:disabled), .quicklink:not(.primary):hover, .quality:hover, .hero button:hover { background: var(--ink); color: var(--paper); }
+.node button:hover:not(:disabled), .routines button:hover { background: var(--chrome); }
+.node.chain button:hover:not(:disabled) { background: var(--paper); }
+button.link:hover { text-decoration-thickness: 3px; }
+.drop:hover { background: var(--chrome); }
+button:focus-visible, .quicklink:focus-visible { outline: 3px solid #4da3ff; outline-offset: 2px; }

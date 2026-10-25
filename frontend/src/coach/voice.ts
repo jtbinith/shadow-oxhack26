@@ -5,10 +5,25 @@ const clipCache = new Map<string, string>()
 // stops, so listening has to keep ignoring the mic for a moment after the coach finishes.
 let lastSoundAt = 0
 const ECHO_MS = 1500
+// One voice channel for the whole app: whatever speaks next stops what's speaking now.
+let playing: HTMLAudioElement | null = null
+let generation = 0
+
+/** Is anything being said right now (coach audio or the browser voice)? */
+export function isSpeaking(): boolean {
+  return (!!playing && !playing.paused && !playing.ended) || !!window.speechSynthesis?.speaking
+}
+
+/** Stop whatever is being said (and anything queued after it). */
+export function stopVoice() {
+  generation++
+  playing?.pause()
+  window.speechSynthesis?.cancel()
+}
 
 export function speakFallback(text: string, rate = 1.05) {
   if (!('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
+  stopVoice()
   const u = new SpeechSynthesisUtterance(text)
   u.rate = rate
   lastSoundAt = performance.now()
@@ -38,8 +53,6 @@ export function chunks(text: string, max = 190): string[] {
  * prefetch() fetches a line's audio ahead of time so it plays instantly later. */
 export function makeSpeak(getToken: () => Promise<string | null>, persona: () => string) {
   const pending = new Map<string, Promise<string>>()
-  let playing: HTMLAudioElement | null = null
-  let generation = 0
 
   const clip = (line: string): Promise<string> => {
     const key = `${persona()}|${line}`
@@ -65,9 +78,8 @@ export function makeSpeak(getToken: () => Promise<string | null>, persona: () =>
   }
 
   const speak = async (text: string, rate = 1.05) => {
-    const mine = ++generation
-    playing?.pause()
-    window.speechSynthesis?.cancel()
+    stopVoice()
+    const mine = generation
     const lines = chunks(text)
     const urls = lines.map((l) => clip(l).catch(() => null)) // fetch all lines at once
     for (let i = 0; i < lines.length; i++) {
@@ -77,6 +89,7 @@ export function makeSpeak(getToken: () => Promise<string | null>, persona: () =>
         speakFallback(lines.slice(i).join(' '), rate)
         return
       }
+      if (mine !== generation) return
       const a = new Audio(url)
       playing = a
       await new Promise<void>((done) => {
@@ -87,8 +100,7 @@ export function makeSpeak(getToken: () => Promise<string | null>, persona: () =>
     }
   }
   /** Is the coach talking right now? (so hands-free listening ignores the coach's own voice) */
-  speak.busy = () =>
-    (!!playing && !playing.paused && !playing.ended) || !!window.speechSynthesis?.speaking || performance.now() - lastSoundAt < ECHO_MS
+  speak.busy = () => isSpeaking() || performance.now() - lastSoundAt < ECHO_MS
   speak.prefetch = (text: string) => {
     for (const l of chunks(text)) void clip(l).catch(() => null)
   }
