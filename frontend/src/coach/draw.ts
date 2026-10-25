@@ -1,6 +1,6 @@
 // Drawing the 2D overlays: the flat ghost, stick poses and the correction arrow.
 import type { Person } from '../pose/PoseCam'
-import { BONES, type Frame } from './score'
+import { BONES, DETAIL_BONES, type Frame } from './score'
 
 // Where to draw a reference pose: anchored at the learner's mid-hip, scaled to their torso.
 export function anchor(person: Person | undefined, w: number, h: number) {
@@ -16,18 +16,54 @@ export function anchor(person: Person | undefined, w: number, h: number) {
 
 export function drawPose(ctx: CanvasRenderingContext2D, f: Frame, at: { x: number; y: number; torso: number }, colours: (string | null)[], width: number) {
   ctx.lineCap = 'round'
-  BONES.forEach(([a, b], i) => {
+  const seg = (a: number, b: number, c: string | null, w: number) => {
     const pa = f[a]
     const pb = f[b]
-    const c = colours[i]
     if (!pa || !pb || !c) return
     ctx.strokeStyle = c
-    ctx.lineWidth = width
+    ctx.lineWidth = w
     ctx.beginPath()
     ctx.moveTo(at.x + pa[0] * at.torso, at.y + pa[1] * at.torso)
     ctx.lineTo(at.x + pb[0] * at.torso, at.y + pb[1] * at.torso)
     ctx.stroke()
-  })
+  }
+  BONES.forEach(([a, b], i) => seg(a, b, colours[i], width))
+  DETAIL_BONES.forEach(([a, b, limb]) => seg(a, b, colours[limb], width * 0.5))
+  // Head: a circle around the ears (or the nose).
+  const head = headCircle(f)
+  if (head && colours[12]) {
+    ctx.strokeStyle = colours[12]!
+    ctx.lineWidth = width * 0.6
+    ctx.beginPath()
+    ctx.arc(at.x + head.c[0] * at.torso, at.y + head.c[1] * at.torso, head.r * at.torso, 0, 2 * Math.PI)
+    ctx.stroke()
+  }
+}
+
+/** Head centre and radius (torso units): around the ears if seen, else just above the nose. */
+export function headCircle(f: Frame): { c: [number, number]; r: number } | null {
+  const [le, re, nose, ls, rs] = [f[7], f[8], f[0], f[11], f[12]]
+  if (le && re) {
+    const c: [number, number] = [(le[0] + re[0]) / 2, (le[1] + re[1]) / 2]
+    return { c, r: Math.max(0.16, Math.hypot(le[0] - re[0], le[1] - re[1]) * 0.75) }
+  }
+  if (nose && ls && rs) {
+    const mid = [(ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2]
+    const r = Math.max(0.14, Math.hypot(nose[0] - mid[0], nose[1] - mid[1]) * 0.55)
+    return { c: [nose[0], nose[1] - r * 0.1], r }
+  }
+  return null
+}
+
+/** Where to draw a pose so all of it fits in a box (for side-by-side snapshots). */
+export function fitAt(f: Frame, box: { x: number; y: number; w: number; h: number }) {
+  const pts = f.filter((p): p is [number, number] => !!p)
+  if (!pts.length) return { x: box.x + box.w / 2, y: box.y + box.h / 2, torso: box.h * 0.2 }
+  const xs = pts.map((p) => p[0])
+  const ys = pts.map((p) => p[1])
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys) - 0.3, Math.max(...ys)]
+  const torso = Math.min((box.w * 0.85) / Math.max(x1 - x0, 0.5), (box.h * 0.85) / Math.max(y1 - y0, 0.5))
+  return { x: box.x + box.w / 2 - ((x0 + x1) / 2) * torso, y: box.y + box.h / 2 - ((y0 + y1) / 2) * torso, torso }
 }
 
 // A solid, translucent body (torso, head, tapered limbs) — reads as a dancer, not a stick figure.
@@ -49,12 +85,11 @@ export function drawBodyGhost(ctx: CanvasRenderingContext2D, f: Frame, at: { x: 
     ctx.fill()
     ctx.stroke()
     // head
-    if (f[0]) {
-      const mid = P([(ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2])
-      const nose = P(f[0])
-      const r = Math.max(8, Math.hypot(nose[0] - mid[0], nose[1] - mid[1]) * 0.55)
+    const head = headCircle(f)
+    if (head) {
+      const [hx, hy] = P(head.c)
       ctx.beginPath()
-      ctx.arc(nose[0], nose[1] + r * 0.35, r, 0, 2 * Math.PI)
+      ctx.arc(hx, hy, Math.max(8, head.r * at.torso), 0, 2 * Math.PI)
       ctx.fill()
       ctx.stroke()
     }
@@ -71,6 +106,22 @@ export function drawBodyGhost(ctx: CanvasRenderingContext2D, f: Frame, at: { x: 
     ctx.strokeStyle = c
     ctx.lineCap = 'round'
     ctx.lineWidth = at.torso * (i % 2 === 0 ? 0.17 : 0.12) // upper limb thicker than fore-limb
+    ctx.beginPath()
+    ctx.moveTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.stroke()
+  })
+  // hands and feet
+  DETAIL_BONES.forEach(([a, b, limb]) => {
+    const pa = f[a]
+    const pb = f[b]
+    const c = colours[limb]
+    if (!pa || !pb || !c) return
+    const [x1, y1] = P(pa)
+    const [x2, y2] = P(pb)
+    ctx.strokeStyle = c
+    ctx.lineCap = 'round'
+    ctx.lineWidth = at.torso * 0.06
     ctx.beginPath()
     ctx.moveTo(x1, y1)
     ctx.lineTo(x2, y2)

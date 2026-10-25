@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import PoseCam, { type Frame as CamFrame, type Person } from '../pose/PoseCam'
 import { useAuth } from '@clerk/clerk-react'
 import { useApi, type Routine, type Step } from '../api'
-import { BONES, angle, boneDirs, normaliseFrame, refFrame, scoreRep, type Frame, type RefData, type UserSample } from '../coach/score'
+import { BONES, angle, boneDirs, normaliseFrame, refFrame, refFrameDisplay, scoreRep, type Frame, type RefData, type UserSample } from '../coach/score'
 import { countInDelay, recordSnippet } from '../coach/micsync'
 import { Ghost3D } from '../coach/ghost3d'
 import { MistakeDetector, THRESHOLDS, describe, holding, howTo, type Mistake, type Sensitivity } from '../coach/live'
-import { anchor, drawArrow, drawBodyGhost, drawPose } from '../coach/draw'
+import { anchor, drawArrow, drawBodyGhost, drawPose, fitAt } from '../coach/draw'
 import { click, makeSpeak, speakFallback } from '../coach/voice'
 import { parseCommand, type Action } from '../coach/commands'
 import { styleCue, styleFor } from '../coach/styles'
@@ -96,6 +96,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     segs: [] as Seg[],
     all: null as RefData | null, // the whole section as one reference timeline
     world: [] as number[][][],
+    display: [] as Frame[], // reference frames for drawing (keeps low-confidence joints)
     secStart: 0, // song time where the section starts
     end: 0, // section length (s)
     baseSpeed: 1,
@@ -156,6 +157,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       const segs: Seg[] = []
       const frames: Frame[] = []
       const world: number[][][] = []
+      const display: Frame[] = []
       const counts: number[] = []
       const hits: number[] = []
       let off = 0
@@ -168,6 +170,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         segs.push({ idx: list[k], off, dur, ref: { frames: fr, fps: r.fps, counts: cs, hits: hs }, names: cs.map((_, j) => ec?.moves?.[j]?.name ?? '') })
         frames.push(...fr)
         world.push(...r.points.map((_, j) => r.world?.[j] ?? []))
+        display.push(...r.points.map(refFrameDisplay))
         counts.push(...cs.map((c) => c + off))
         hits.push(...hs.map((h) => h + off))
         off += dur
@@ -175,7 +178,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       const all: RefData = { frames, fps: refs[0]?.fps ?? 30, counts, hits }
       const beat = (counts[1] - counts[0]) || 0.5
       Object.assign(S.current, {
-        segs, all, world, end: off, session,
+        segs, all, world, display, end: off, session,
         secStart: routine.eight_counts.find((e) => e.idx === list[0])?.start_s ?? 0,
         perf: { running: false, base: 0, at: 0 },
         detector: new MistakeDetector(all, { sensitivity: sensitivityRef.current, mask: ALL_BONES, windowS: Math.max(0.8, 1.5 * beat) }),
@@ -340,7 +343,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     } else {
       st.stats.pauses++
       st.pausesAt.set(k, (st.pausesAt.get(k) ?? 0) + 1)
-      if (st.all) st.target = { frame: st.all.frames[m.j], j: m.j, bone: m.bone }
+      if (st.all) {
+        st.target = { frame: st.all.frames[m.j], j: m.j, bone: m.bone }
+        seek(m.j / st.all.fps) // the video shows the same moment as the frozen ghost
+      }
       const d = describe(m, count)
       const how = howTo(m, count)
       speak.prefetch(how.spoken) // so "How do I fix it?" answers instantly
@@ -349,7 +355,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       void recordSeg(k, m, count)
     }
     setPhase('paused')
-  }, [halt, now, recordSeg, say, speak])
+  }, [halt, now, recordSeg, say, seek, speak])
 
   // ---- redo the 8-count where the mistake was, then carry on past it ----
   const redo = useCallback(() => {
@@ -467,7 +473,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     }
     const paused = st.phase === 'paused' && st.target
     const j = paused ? st.target!.j : Math.min(all.frames.length - 1, Math.max(0, Math.round(now() * all.fps)))
-    const rf = all.frames[j]
+    const rf = st.display[j] ?? all.frames[j]
     const me = people.find((p) => p.id === dancerId)
     const w = ctx.canvas.width
     const h = ctx.canvas.height
@@ -515,9 +521,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     if (!c || !m || !all) return
     const ctx = c.getContext('2d')!
     ctx.clearRect(0, 0, c.width, c.height)
-    const torso = c.height * 0.2
-    drawPose(ctx, m.frame, { x: c.width * 0.27, y: c.height * 0.55, torso }, BONES.map((_, i) => (i === m.bone ? '#ff5a5a' : 'rgba(255,170,90,0.95)')), 6)
-    drawPose(ctx, all.frames[m.j], { x: c.width * 0.73, y: c.height * 0.55, torso }, BONES.map((_, i) => (i === m.bone ? '#78ff8c' : 'rgba(127,216,255,0.95)')), 6)
+    const target = S.current.display[m.j] ?? all.frames[m.j]
+    const half = { y: 28, w: c.width / 2, h: c.height - 34 }
+    drawPose(ctx, m.frame, fitAt(m.frame, { x: 0, ...half }), BONES.map((_, i) => (i === m.bone ? '#ff5a5a' : 'rgba(255,170,90,0.95)')), 6)
+    drawPose(ctx, target, fitAt(target, { x: c.width / 2, ...half }), BONES.map((_, i) => (i === m.bone ? '#78ff8c' : 'rgba(127,216,255,0.95)')), 6)
     ctx.fillStyle = '#fff'
     ctx.font = '600 15px system-ui'
     ctx.fillText('You', c.width * 0.27 - 14, 20)

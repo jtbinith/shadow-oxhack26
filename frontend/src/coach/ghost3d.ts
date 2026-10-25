@@ -6,7 +6,7 @@
 // projection identical to the 2D overlay — the 3D adds shading, thickness and limbs passing
 // in front of / behind the body.
 import * as THREE from 'three'
-import { BONES, type Frame } from './score'
+import { BONES, DETAIL_BONES, type Frame } from './score'
 
 type At = { x: number; y: number; torso: number }
 
@@ -38,6 +38,8 @@ export class Ghost3D {
   private neck: THREE.Mesh
   private head: THREE.Mesh
   private feet: THREE.Mesh[] = []
+  private details: THREE.Mesh[] = []
+  private palms: THREE.Mesh[] = []
   private bodyMat = material(BODY, 0.62)
   private size = { w: 0, h: 0 }
   private tmp = { a: new THREE.Vector3(), b: new THREE.Vector3(), d: new THREE.Vector3(), m: new THREE.Matrix4() }
@@ -75,6 +77,17 @@ export class Ghost3D {
       const f = new THREE.Mesh(cyl, this.bodyMat)
       this.feet.push(f)
       this.scene.add(f)
+    }
+    // Hands and feet: fingers/thumb/palm edge and heel/toe segments, plus a palm ball.
+    for (let k = 0; k < DETAIL_BONES.length; k++) {
+      const d = new THREE.Mesh(cyl, this.bodyMat)
+      this.details.push(d)
+      this.scene.add(d)
+    }
+    for (let k = 0; k < 2; k++) {
+      const palm = new THREE.Mesh(ball, this.bodyMat)
+      this.palms.push(palm)
+      this.scene.add(palm)
     }
     this.scene.add(this.torso, this.neck, this.head)
   }
@@ -163,6 +176,22 @@ export class Ghost3D {
     // Feet: ankle to toe.
     this.segment(this.feet[0], P(27), P(31), 0.05 * at.torso)
     this.segment(this.feet[1], P(28), P(32), 0.05 * at.torso)
+    // Hands and feet detail, coloured like the limb they hang off.
+    DETAIL_BONES.forEach(([a, b, limb], k) => {
+      const mesh = this.details[k]
+      mesh.material = this.limbMats[limb]
+      const on = this.limbs[limb].visible
+      this.segment(mesh, on ? P(a) : null, on ? P(b) : null, (a >= 27 ? 0.045 : 0.032) * at.torso)
+    })
+    ;[[15, 17, 19, 1], [16, 18, 20, 3]].forEach(([w, pk, ix, limb], k) => {
+      const pw = P(w), pp = P(pk), pi = P(ix)
+      const palm = this.palms[k]
+      palm.visible = !!(pw && pp && pi) && this.limbs[limb].visible
+      if (!palm.visible) return
+      palm.material = this.limbMats[limb]
+      palm.position.copy(pw!).add(pp!).add(pi!).divideScalar(3)
+      palm.scale.setScalar(0.065 * at.torso)
+    })
 
     // Torso, oriented by the shoulder and hip lines.
     const ls = P(11), rs = P(12), lh = P(23), rh = P(24)
@@ -181,11 +210,20 @@ export class Ghost3D {
       this.torso.quaternion.setFromRotationMatrix(this.tmp.m)
       this.torso.position.addVectors(shMid, hipMid).multiplyScalar(0.5)
       this.torso.scale.set(width, height * 1.08, width * 0.5)
-      // Neck and head.
+      // Neck and head: centred between the ears when seen (works side-on and face-down), else from the nose.
       const nose = P(0)
-      if (nose) {
-        const r = Math.max(8, nose.distanceTo(shMid) * 0.55)
-        const headC = nose.clone().addScaledVector(up, -r * 0.35)
+      const le = P(7), re = P(8)
+      if (le || re || nose) {
+        let headC: THREE.Vector3
+        let r: number
+        if (le && re) {
+          headC = le.clone().add(re).multiplyScalar(0.5)
+          r = Math.max(0.16 * at.torso, le.distanceTo(re) * 0.75)
+        } else {
+          const n = (nose ?? le ?? re)!
+          r = Math.max(0.14 * at.torso, n.distanceTo(shMid) * 0.5)
+          headC = n.clone().addScaledVector(up, -r * 0.2)
+        }
         this.head.visible = true
         this.head.position.copy(headC)
         this.head.scale.set(r * 0.85, r, r * 0.9)

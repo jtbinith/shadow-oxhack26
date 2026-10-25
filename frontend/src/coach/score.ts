@@ -35,6 +35,21 @@ export function normaliseFrame(pts: { x: number; y: number; visibility?: number 
   return px.map((p, i) => (vis(i) ? ([(p[0] - hip[0]) / torso, (p[1] - hip[1]) / torso] as P) : null))
 }
 
+// Extra segments for drawing the ghost (not scored): hands and feet. Third value = the limb
+// (BONES index) they belong to, for colour.
+export const DETAIL_BONES: [number, number, number][] = [
+  [15, 19, 1], [15, 17, 1], [15, 21, 1], [17, 19, 1], // left hand: wrist→index, wrist→pinky, thumb, palm edge
+  [16, 20, 3], [16, 18, 3], [16, 22, 3], [18, 20, 3], // right hand
+  [27, 29, 5], [29, 31, 5], [27, 31, 5], // left foot: ankle, heel, toes
+  [28, 30, 7], [30, 32, 7], [28, 32, 7], // right foot
+]
+
+/** For display: keep low-confidence points too (floor work hides joints, but the pose model's
+ * estimate is still the best guess of where they are). Scoring uses refFrame. */
+export function refFrameDisplay(points: number[][]): Frame {
+  return points.map(([x, y, v]) => (v > 0.02 && (x !== 0 || y !== 0) ? ([x, y] as P) : null))
+}
+
 /** Reference frames from the server ([x, y, vis] per point) → Frame. */
 export function refFrame(points: number[][]): Frame {
   return points.map(([x, y, v]) => (v > 0.3 && (x !== 0 || y !== 0) ? ([x, y] as P) : null))
