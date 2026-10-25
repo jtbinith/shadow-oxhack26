@@ -544,3 +544,15 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 /* Crash fallback */
 .crash { max-width: 640px; margin: 3rem auto; }
 .crash h2 { display: flex; align-items: center; gap: 0.6rem; }
+/* The camera + routine video pair, which can go full screen together */
+.dance-area { flex: 1; min-width: 0; display: flex; gap: 1.4rem; align-items: stretch; position: relative; }
+.dance-area .refpanel { width: 34%; }
+.fs-toggle { position: absolute; top: 0; right: 0; z-index: 5; }
+.dance-area.is-full { background: #000; padding: 3vh 2vw; gap: 2vw; align-items: center; box-sizing: border-box; }
+.dance-area.is-full .stage-col { flex: 2.2; }
+.dance-area.is-full .refpanel { width: auto; flex: 1; }
+.dance-area.is-full .refpanel video { max-height: 78vh; }
+.dance-area.is-full .refpanel .notice { color: #bbb; }
+.dance-area.is-full .fs-toggle { top: 2vh; right: 2vw; }
+.fs-controls { position: absolute; left: 50%; bottom: 3vh; transform: translateX(-50%); display: flex; gap: 0.8rem; z-index: 5; }
+@media (max-width: 900px) { .dance-area { flex-direction: column; } .dance-area .refpanel { width: 100%; } }

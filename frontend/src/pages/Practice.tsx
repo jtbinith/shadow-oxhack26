@@ -80,6 +80,23 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   // Which pause the third crow has landed for (the card's "It's a murder!" waits for it).
   const [murderFor, setMurderFor] = useState<object | null>(null)
   const onMurderFull = useCallback(() => setMurderFor(pause), [pause])
+  // Full screen: the camera and the routine video together, big enough to see while dancing.
+  const danceArea = useRef<HTMLDivElement>(null)
+  const [fullscreen, setFullscreen] = useState(false)
+  useEffect(() => {
+    const on = () => setFullscreen(document.fullscreenElement === danceArea.current && !!danceArea.current)
+    document.addEventListener('fullscreenchange', on)
+    return () => {
+      document.removeEventListener('fullscreenchange', on)
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+    }
+  }, [])
+  const enterFullscreen = () => {
+    if (!document.fullscreenElement) void danceArea.current?.requestFullscreen().catch(() => {})
+  }
+  const exitFullscreen = () => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
+  }
   // One crow at a time towards what the pressure calls for.
   const updateCrows = (pressure: number) => {
     const c = crowsRef.current
@@ -621,6 +638,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     if (phase === 'ready') seek(0)
   }, [phase, seek, videoUrl])
 
+  // Leave full screen whenever the flow stops (a pause shows the fix; stop and done go back to the page).
+  useEffect(() => {
+    if (phase === 'paused' || phase === 'ready' || phase === 'done') exitFullscreen()
+  }, [phase])
+
   const begin = (from = 0, lead = 0.3, music = false, sp = speed) => {
     const st = S.current
     st.baseSpeed = sp
@@ -1050,6 +1072,17 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             </div>
           )}
         </aside>
+        <div className={`dance-area ${fullscreen ? 'is-full' : ''}`} ref={danceArea}>
+        <button className="icon fs-toggle" onClick={() => (fullscreen ? exitFullscreen() : enterFullscreen())}
+          title={fullscreen ? 'Exit full screen (Esc)' : 'Full screen: camera and video, big'} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}>
+          {fullscreen ? <ShrinkIcon /> : <ExpandIcon />}
+        </button>
+        {fullscreen && (phase === 'flowing' || phase === 'countin') && (
+          <div className="fs-controls">
+            {phase === 'flowing' && <button className="icon halt" onClick={() => stopFor(null, 'manual')} title="Pause" aria-label="Pause"><PauseIcon /></button>}
+            <button className="icon halt" onClick={stop} title="Stop" aria-label="Stop"><StopIcon /></button>
+          </div>
+        )}
         <div className="stage-col">
         <MurderPerch count={phase === 'flowing' || (phase === 'paused' && !!pause?.m) ? crows : 0} murder={phase === 'paused' && !!pause?.m} onFull={onMurderFull} />
         <div className="stage">
@@ -1074,6 +1107,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             marks={S.current.segs.map((x) => (S.current.end ? x.off / S.current.end : 0))} />
           <span className="notice">The routine, in sync with you{speed < 1 ? ` (${speed}×)` : ''}</span>
         </div>
+        </div>
       </div>
 
       {note && <p className="notice flow-note">{note}</p>}
@@ -1096,7 +1130,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
             </section>
           ) : null}
           <div className="controls">
-            <button className="go" onClick={() => begin()}>Start flowing ({speed}×)</button>
+            <button className="go" onClick={() => { enterFullscreen(); begin() }}>Start flowing ({speed}×)</button>
             <button className="go" onClick={watch}>Watch it first</button>
             <label>
               Speed{' '}
@@ -1215,6 +1249,12 @@ function RunProgress({ now, marks }: { now: () => number; marks: number[] }) {
 
 const PauseIcon = () => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" /><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" /></svg>
+)
+const ExpandIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+)
+const ShrinkIcon = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></svg>
 )
 const StopIcon = () => (
   <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" /></svg>
