@@ -20,8 +20,9 @@ function moveName(routine: Routine, step: Step) {
 
 // A Duolingo-style path: a step unlocks when the one before it has been passed at any speed;
 // bronze / silver / gold = passed at 0.5× / 0.75× / 1×.
-export default function LessonTree({ routine, practise, flowAll, showProgress, replanned }: {
+export default function LessonTree({ routine, back, practise, flowAll, showProgress, replanned }: {
   routine: Routine
+  back: () => void
   practise: (index: number) => void
   flowAll: () => void
   showProgress: () => void
@@ -55,6 +56,7 @@ export default function LessonTree({ routine, practise, flowAll, showProgress, r
   return (
     <section className="tree">
       <header className="tree-head">
+        <button className="link back" onClick={back}>← My routines</button>
         <h2>{routine.title}</h2>
         <p className="notice">
           {Math.round(routine.tempo_bpm ?? 0)} BPM · {routine.eight_counts.length} eight-counts

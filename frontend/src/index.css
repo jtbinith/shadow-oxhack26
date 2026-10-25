@@ -160,3 +160,4 @@ td.gold { color: #ffd700; } td.silver { color: #c0c0c0; } td.bronze { color: #cd
 .coach-says .more { margin-top: 0.5rem; opacity: 0.9; }
 .chip.live { background: #c0392b; color: #fff; border-color: #c0392b; }
 .heard { font-style: italic; }
+.link.back { display: inline-block; margin: 0 0 0.6rem; padding-left: 0; }

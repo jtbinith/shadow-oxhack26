@@ -117,6 +117,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     session: null as string | null,
     timers: [] as number[],
     music: false,
+    demoBack: 'ready' as Phase, // where a demo returns to
   })
   S.current.phase = phase
   const video = useRef<HTMLVideoElement>(null)
@@ -551,12 +552,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
   const stop = () => {
     halt()
+    setPause(null)
     setPhase('ready')
   }
 
   // "Watch it first": this step's 8-counts once, ghost and video together, no judging.
   const watch = () => {
     const st = S.current
+    st.demoBack = 'ready'
     halt()
     st.speed = speed
     seek(0)
@@ -624,6 +627,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const from = seg.off + (count ? cs[Math.max(0, count - 2)] ?? 0 : 0)
     const to = seg.off + (count ? cs[count + 1] ?? seg.dur : seg.dur)
     const back: Phase = st.phase === 'paused' ? 'paused' : 'ready'
+    st.demoBack = back
     halt()
     const keep = st.speed
     st.speed = Math.min(keep, 0.5)
@@ -954,7 +958,11 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
       {(phase === 'flowing' || phase === 'countin' || phase === 'watching') && (
         <div className="controls">
-          <button onClick={stop}>■ Stop</button>
+          {phase === 'watching' && S.current.demoBack === 'paused' && (
+            <button onClick={() => { halt(); setPhase('paused') }}>← Back to the fix</button>
+          )}
+          {phase === 'watching' && S.current.demoBack !== 'paused' && <button onClick={stop}>← Back</button>}
+          {phase !== 'watching' && <button onClick={stop}>■ Stop</button>}
           {phase === 'flowing' && <button onClick={() => stopFor(null, 'manual')}>❚❚ Pause</button>}
         </div>
       )}
