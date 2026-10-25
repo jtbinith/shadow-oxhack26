@@ -10,6 +10,9 @@ import { anchor, drawArrow, drawBodyGhost, drawPose, fitAt } from '../coach/draw
 import { click, isSpeaking, loadCountIn, makeSpeak, playAt, speakFallback, stopVoice } from '../coach/voice'
 import { parseCommand, type Action } from '../coach/commands'
 import QuickLink from '../QuickLink'
+import Crow from '../brand/Crow'
+import Murder from '../brand/Murder'
+import HoppingCrow from '../brand/HoppingCrow'
 import { styleCue, styleFor } from '../coach/styles'
 
 // Practice is one continuous flow: the routine video plays (it is the clock), the ghost moves
@@ -70,6 +73,15 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const [calling, setCalling] = useState<{ seg: number; count: number; name: string } | null>(null)
   const [pause, setPause] = useState<Pause | null>(null)
   const [held, setHeld] = useState(false)
+  // The murder meter: crows gather as the dancing drifts towards the stop threshold.
+  const [crows, setCrows] = useState(0)
+  const crowsRef = useRef(0)
+  const setCrowCount = (n: number) => {
+    if (n !== crowsRef.current) {
+      crowsRef.current = n
+      setCrows(n)
+    }
+  }
   const [giveUp, setGiveUp] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [habit, setHabit] = useState<string | null>(null)
@@ -285,6 +297,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     setPause(null)
     setHeld(false)
     setSummary(null)
+    crowsRef.current = 0
+    setCrows(0)
     const beat = ((all.counts[1] - all.counts[0]) || 0.5) / st.speed
     const countIn = () => {
       const t0 = audio.currentTime + lead
@@ -520,6 +534,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     st.samples.push({ t: t - (st.segs[k]?.off ?? 0), frame })
     const s = st.detector?.push(t, frame)
     if (s) st.lastErrs = s.errs
+    // 0 crows while it's going well; one more for each step closer to a stop; 5 = a murder (stop).
+    const pressure = st.detector?.pressure(t) ?? 0
+    setCrowCount(pressure < 0.55 ? 0 : Math.min(4, 1 + Math.floor((pressure - 0.55) / 0.11)))
     const m = st.detector?.check(t)
     if (m) stopFor(m)
   }, [finishSection, flowFrom, now, recordSeg, say, stopFor])
@@ -1062,6 +1079,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
           <PoseCam onFrame={onFrame} overlay={overlay} />
           <canvas ref={ghostCanvas} className="ghost3d" aria-hidden="true" />
           {countLabel && <div className="countin">{countLabel}</div>}
+          {(phase === 'flowing' || (phase === 'paused' && pause?.m)) && (
+            <div className={`murder-meter n${phase === 'paused' ? 5 : crows}`} aria-live="polite">
+              {Array.from({ length: phase === 'paused' ? 5 : crows }, (_, i) => (
+                <Crow key={i} pose={(['stand', 'peck', 'caw', 'hop', 'caw'] as const)[i]} size={58} flip={i % 2 === 1} className="perched" />
+              ))}
+              {phase === 'flowing' && crows >= 3 && <span className="murder-warn">{crows >= 4 ? 'Careful… nearly a murder' : 'The crows are gathering…'}</span>}
+            </div>
+          )}
           {caption && (phase === 'flowing' || phase === 'countin' || phase === 'watching') && (
             <div className="caption-overlay" aria-hidden="true">{caption.settled} <i>{caption.guess}</i></div>
           )}
@@ -1084,7 +1109,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {note && <p className="notice flow-note">{note}</p>}
 
       {syncMsg && <p className="notice sync-msg">{syncMsg}</p>}
-      {phase === 'loading' && <p className="notice">Loading the routine…</p>}
+      {phase === 'loading' && <p className="loading-crow"><HoppingCrow size={44} /> Loading the routine…</p>}
 
       {phase === 'ready' && (
         <>
@@ -1150,6 +1175,12 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
       {phase === 'paused' && pause && (
         <div className="mistake">
+          {pause.m && (
+            <div className="murder-title">
+              <Murder count={4} size={40} />
+              <b>It's a murder!</b>
+            </div>
+          )}
           <h3>{pause.headline}{!pause.lost && <span className="notice"> · {phraseName(routine, segNo(pause.seg) - 1)}</span>}</h3>
           <ul className="fixes">
             {pause.fixes.map((f, i) => <li key={i}>{f}</li>)}
@@ -1177,6 +1208,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
       {phase === 'done' && summary && (
         <div className="feedback">
           <p className="cue">
+            {summary.pauses === 0 && <><Crow size={40} pose="caw" /> Not a crow in sight. </>}
             {summary.passed ? `Step passed at ${speed}×! The next step is unlocked.`
               : scope === 'step' && summary.pauses > 0 ? `Made it through with ${summary.pauses} stop${summary.pauses === 1 ? '' : 's'}. One clean run without a stop passes the step.`
                 : scope === 'step' && summary.relaxed ? 'Clean run! On "way off" it doesn\'t count as a pass. Switch to "noticeably off" to pass the step.'

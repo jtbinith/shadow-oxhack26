@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApi, type Routine } from '../api'
 import QuickLink from '../QuickLink'
+import Murder from '../brand/Murder'
+import HoppingCrow from '../brand/HoppingCrow'
 import { STYLES } from '../coach/styles'
 
 type Summary = Pick<Routine, 'id' | 'title' | 'status' | 'tempo_bpm' | 'created_at'> & { steps_total?: number; steps_passed?: number }
@@ -49,6 +51,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
   return (
     <>
     <section className="intro">
+      <Murder count={4} size={52} />
       <h1>Hello.<br />Learn any dance.</h1>
       <p>Upload a dance video. Shadow cuts it into counts, builds you a lesson path, and coaches you live through your camera.</p>
     </section>
@@ -92,7 +95,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
 
       <section className="card" data-title="my-routines">
         <h2>Your routines</h2>
-        {routines === null && <p className="notice">Loading…</p>}
+        {routines === null && <p className="loading-crow"><HoppingCrow size={44} /> Loading…</p>}
         {routines?.length === 0 && <p className="notice">None yet. Upload one above.</p>}
         <ul className="routines">
           {routines?.map((r) => (

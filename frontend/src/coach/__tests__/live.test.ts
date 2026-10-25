@@ -75,3 +75,17 @@ group('howTo', () => {
     expect(h.spoken).not.toMatch(/\d+ ?(°|ms|degrees)/)
   })
 })
+
+group('pressure (how close to a stop)', () => {
+  it('is low when dancing well and rises towards 1 as it goes wrong', async () => {
+    const { MistakeDetector } = await import('../live')
+    const good = new MistakeDetector(ref, { sensitivity: 'normal', mask, windowS: 1 })
+    const bad = new MistakeDetector(ref, { sensitivity: 'normal', mask, windowS: 1 })
+    for (let t = 0; t <= 3; t += 1 / FPS) {
+      good.push(t, pose(t))
+      bad.push(t, t > 2 ? pose(t, -1.2) : pose(t))
+    }
+    expect(good.pressure(3)).toBeLessThan(0.3)
+    expect(bad.pressure(3)).toBeGreaterThan(0.8)
+  })
+})

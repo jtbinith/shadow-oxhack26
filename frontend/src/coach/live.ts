@@ -137,6 +137,27 @@ export class MistakeDetector {
     return s
   }
 
+  /** How close the window is to a stop: 0 = dancing well, 1 = at the threshold (a stop). */
+  pressure(t: number): number {
+    if (t < this.graceUntil) return 0
+    const w = this.samples
+    if (w.length < 8) return 0
+    const th = THRESHOLDS[this.opts.sensitivity]
+    let worst = 0
+    let sum = 0
+    let n = 0
+    for (let b = 0; b < LIMBS; b++) {
+      const v = w.map((s) => s.errs[b]).filter((e): e is number => e !== null)
+      if (v.length < w.length / 2) continue
+      const m = v.reduce((a, c) => a + c, 0) / v.length
+      worst = Math.max(worst, m)
+      sum += m
+      n++
+    }
+    if (n < 3) return 0
+    return Math.min(1, Math.max(worst / th.bone, sum / n / th.mean))
+  }
+
   /** A sustained mistake over the window, or null. */
   check(t: number): Mistake | null {
     if (t < this.graceUntil) return null

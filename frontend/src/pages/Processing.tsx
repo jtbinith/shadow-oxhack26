@@ -1,4 +1,5 @@
 import type { Routine } from '../api'
+import HoppingCrow from '../brand/HoppingCrow'
 
 // The steps a viewer sees, in order, with the stage name that completes each.
 const STEPS: { stage: string; label: string }[] = [
@@ -19,7 +20,7 @@ export default function Processing({ routine }: { routine: Routine }) {
   const next = STEPS.find((s) => !done.has(s.stage))
   return (
     <section className="card processing" data-title="building.log">
-      <h2>Building “{routine.title}”</h2>
+      <h2 className="building"><HoppingCrow size={52} /> Building “{routine.title}”</h2>
       <ol>
         {STEPS.map((s) => {
           const d = detail(s.stage)

@@ -8,6 +8,9 @@ import Practice from './pages/Practice'
 import ProgressPage from './pages/Progress'
 import MyProgress from './pages/MyProgress'
 import QuickLink from './QuickLink'
+import Crow from './brand/Crow'
+import Murder from './brand/Murder'
+import HoppingCrow from './brand/HoppingCrow'
 import { useApi, type Routine } from './api'
 
 // Navigation lives in the browser history, so the browser / phone back button works everywhere.
@@ -46,6 +49,7 @@ export default function App() {
     <main>
       <header>
         <h1 className="logo" onClick={() => go(home)}>
+          <Crow size={46} pose="caw" title="Shadow" />
           Shadow
         </h1>
         <SignedIn>
@@ -58,6 +62,7 @@ export default function App() {
       </header>
       <SignedOut>
         <section className="hero">
+          <Murder count={4} size={56} />
           <h1>Hello.<br />Learn any dance.</h1>
           <p>From any video, with a coach that adapts to every rep.</p>
           <SignInButton mode="modal" />
@@ -106,7 +111,7 @@ function RoutineView({ id, screen, go, back }: { id: string; screen: Screen } & 
     }
     // Refetch when coming back to a screen, so newly unlocked steps show.
   }, [api, id, reload, screen.name])
-  if (!routine) return <p className="notice">Loading…</p>
+  if (!routine) return <p className="loading-crow"><HoppingCrow size={44} /> Loading…</p>
   if (routine.status !== 'ready')
     return (
       <>
