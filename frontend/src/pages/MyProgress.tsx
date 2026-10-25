@@ -10,8 +10,6 @@ type MyStats = {
   habits: { label: string; times: number; share: number; routine: string }[]
 }
 
-const tier = (s: number | null) => (s === null ? '—' : s >= 1 ? 'gold' : s >= 0.75 ? 'silver' : s >= 0.5 ? 'bronze' : '—')
-
 function ago(iso: string | null) {
   if (!iso) return 'not yet'
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
@@ -77,7 +75,7 @@ export default function MyProgress({ back, open }: { back: () => void; open: (id
       <div className="card" data-title="routines">
         <h3>Each routine</h3>
         <table className="routine-table">
-          <thead><tr><th>Routine</th><th>Steps passed</th><th>Reps</th><th>Avg score</th><th>Best medal</th><th>Last practised</th><th /></tr></thead>
+          <thead><tr><th>Routine</th><th>Steps passed</th><th>Reps</th><th>Avg score</th><th>Last practised</th><th /></tr></thead>
           <tbody>
             {s.routines.map((r) => (
               <tr key={r.id}>
@@ -90,7 +88,6 @@ export default function MyProgress({ back, open }: { back: () => void; open: (id
                 </td>
                 <td>{r.reps}</td>
                 <td>{r.avg_score ?? '—'}</td>
-                <td className={tier(r.best_speed)}>{tier(r.best_speed)}</td>
                 <td>{ago(r.last_practised)}</td>
                 <td>{r.status === 'ready' && <QuickLink onClick={() => open(r.id)}>Open</QuickLink>}</td>
               </tr>
