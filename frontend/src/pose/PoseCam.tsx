@@ -179,7 +179,7 @@ export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame)
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState('Starting camera…')
   const [perf, setPerf] = useState('')
-  // Technical readout (fps, timings) and tuning buttons: hidden unless asked for; remembered.
+  // Technical readout (fps, timings): hidden unless asked for; remembered.
   const [metrics, setMetrics] = useState(() => localStorage.getItem('shadow.metrics') === 'on')
   useEffect(() => localStorage.setItem('shadow.metrics', metrics ? 'on' : 'off'), [metrics])
   const [quality, setQuality] = useState<PoseQuality>('fast')
@@ -509,7 +509,6 @@ export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame)
       >
         Metrics: {metrics ? 'on' : 'off'}
       </button>
-      {metrics && (<>
       <button
         className="quality"
         onClick={(e) => {
@@ -528,7 +527,6 @@ export default function PoseCam({ onFrame, overlay }: { onFrame?: (frame: Frame)
       >
         Focus: {focus ? 'on' : 'off'}
       </button>
-      </>)}
     </div>
   )
 }
