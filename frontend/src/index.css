@@ -374,25 +374,38 @@ td.gold { color: #b08900; font-weight: 800; } td.silver { color: #707070; font-w
 .murder-title { display: flex; align-items: flex-end; gap: 0.8rem; margin: 0 0 0.4rem; }
 .murder-title b { font-size: 1.9rem; font-weight: 800; line-height: 1; }
 .cue .crow { vertical-align: -6px; }
-/* Hopping crow loop (1s): crouch → spring → air → land squash → settle */
+/* Hopping crow loop (2 s): a full hop, then a smaller one. Each hop: crouch → spring → air → land squash → settle */
 .hopping-crow { position: relative; display: inline-block; vertical-align: bottom; }
-.hop-body { position: absolute; inset: 0; transform-origin: 50% 100%; animation: crow-hop 1s cubic-bezier(.3,.0,.4,1) infinite; }
+.hop-body { position: absolute; inset: 0; transform-origin: 50% 100%; animation: crow-hop 2s cubic-bezier(.3,.0,.4,1) infinite; }
 .hop-frame { position: absolute; left: 0; bottom: 0; line-height: 0; }
-.hop-frame.air { opacity: 0; animation: crow-air 1s steps(1) infinite; }
-.hop-frame.ground { animation: crow-ground 1s steps(1) infinite; }
-.hop-shadow { position: absolute; left: 22%; right: 22%; bottom: -3px; height: 5px; border-radius: 50%; background: rgba(0,0,0,0.25); animation: crow-shadow 1s ease-in-out infinite; }
+.hop-frame.air { opacity: 0; animation: crow-air 2s steps(1) infinite; }
+.hop-frame.ground { animation: crow-ground 2s steps(1) infinite; }
+.hop-shadow { position: absolute; left: 22%; right: 22%; bottom: -3px; height: 5px; border-radius: 50%; background: rgba(0,0,0,0.25); animation: crow-shadow 2s ease-in-out infinite; }
 @keyframes crow-hop {
+  /* big hop */
   0%   { transform: translateY(0) scale(1, 1); }
-  18%  { transform: translateY(0) scale(1.12, 0.86); }   /* crouch */
-  30%  { transform: translateY(-22%) scale(0.92, 1.1); } /* spring */
-  50%  { transform: translateY(-38%) scale(1, 1) rotate(-6deg); } /* top of the hop */
-  70%  { transform: translateY(0) scale(1, 1); }          /* touch down */
-  78%  { transform: translateY(0) scale(1.14, 0.84); }    /* land squash */
-  90%  { transform: translateY(0) scale(0.97, 1.04); }
+  9%   { transform: translateY(0) scale(1.12, 0.86); }
+  15%  { transform: translateY(-22%) scale(0.92, 1.1); }
+  25%  { transform: translateY(-38%) scale(1, 1) rotate(-6deg); }
+  35%  { transform: translateY(0) scale(1, 1); }
+  39%  { transform: translateY(0) scale(1.14, 0.84); }
+  45%  { transform: translateY(0) scale(0.97, 1.04); }
+  50%  { transform: translateY(0) scale(1, 1); }
+  /* smaller hop */
+  58%  { transform: translateY(0) scale(1.08, 0.9); }
+  64%  { transform: translateY(-13%) scale(0.95, 1.06); }
+  73%  { transform: translateY(-22%) scale(1, 1) rotate(-4deg); }
+  82%  { transform: translateY(0) scale(1, 1); }
+  86%  { transform: translateY(0) scale(1.1, 0.88); }
+  93%  { transform: translateY(0) scale(0.98, 1.03); }
   100% { transform: translateY(0) scale(1, 1); }
 }
-@keyframes crow-air { 0% { opacity: 0; } 26% { opacity: 1; } 68% { opacity: 0; } }
-@keyframes crow-ground { 0% { opacity: 1; } 26% { opacity: 0; } 68% { opacity: 1; } }
-@keyframes crow-shadow { 0%, 18%, 70%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(0.55); opacity: 0.45; } }
+@keyframes crow-air { 0% { opacity: 0; } 13% { opacity: 1; } 34% { opacity: 0; } 62% { opacity: 1; } 81% { opacity: 0; } }
+@keyframes crow-ground { 0% { opacity: 1; } 13% { opacity: 0; } 34% { opacity: 1; } 62% { opacity: 0; } 81% { opacity: 1; } }
+@keyframes crow-shadow {
+  0%, 9%, 35%, 58%, 82%, 100% { transform: scaleX(1); opacity: 1; }
+  25% { transform: scaleX(0.55); opacity: 0.45; }
+  73% { transform: scaleX(0.72); opacity: 0.65; }
+}
 .loading-crow { display: flex; align-items: center; gap: 0.8rem; padding: 2rem 0; font-weight: 700; }
 .building { display: flex; align-items: flex-end; gap: 0.7rem; }

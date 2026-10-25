@@ -15,7 +15,7 @@ exactly what to fix.
 
 ## Assets
 - `crow.svg`: the mark (also the favicon, `frontend/public/favicon.svg`).
-- `crow-hop.gif`: the hop loop (1 s, 20 fps): crouch, spring with legs tucked, land with a squash.
+- `crow-hop.gif`: the hop loop (2 s, 20 fps): a full hop then a smaller one; each crouches, springs with legs tucked, lands with a squash.
 - In code: `frontend/src/brand/Crow.tsx` (poses: stand, caw, flap = a little jump, peck, hop),
   `Murder.tsx` (a row of crows), `HoppingCrow.tsx` (the animated loop, used on loading and
   processing screens).
