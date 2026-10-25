@@ -52,7 +52,7 @@ export default function Home({ open, tryCamera }: { open: (id: string) => void; 
     <section className="intro">
       <h1>Hello.<br />Learn any dance.</h1>
       <p>Upload a dance video. Shadow cuts it into counts, builds you a lesson path, and coaches you live through your camera.</p>
-      <p className="lore"><mark>You shadow the dancer, move for move. The crows are watching too: slip up and they gather, and a gathering of crows is called a murder.</mark></p>
+      <p className="lore"><mark>You shadow the dancer, move for move. The crows are watching too: slip up and they gather.</mark></p>
     </section>
     <div className="home">
       <section className="card upload" data-title="new-routine.mov">
