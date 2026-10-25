@@ -45,6 +45,7 @@ const describeAction = (a: Action): string =>
             : a.type === 'continue' ? 'carry on' : a.type === 'repeat_voice' ? 'say it again' : a.type
 const LOST_AFTER_S = 2.5
 const HOLD_S = 0.8
+const GIVE_UP_S = 15 // trying to match a paused pose this long → go again in motion
 const ALL_BONES = Array(BONES.length).fill(true)
 
 // mode 'step': flow through one lesson-tree step; a clean run (no stops) passes it.
@@ -68,6 +69,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
   const [calling, setCalling] = useState<{ seg: number; count: number; name: string } | null>(null)
   const [pause, setPause] = useState<Pause | null>(null)
   const [held, setHeld] = useState(false)
+  const [giveUp, setGiveUp] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const [habit, setHabit] = useState<string | null>(null)
   const [summary, setSummary] = useState<{ clean: number; pauses: number; trickiest: number | null; passed: boolean | null; relaxed: boolean } | null>(null)
@@ -118,6 +120,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     timers: [] as number[],
     music: false,
     demoBack: 'ready' as Phase, // where a demo returns to
+    tryingFor: 0, // seconds in view while trying to match the paused pose
+    lastTryAt: 0,
+    gaveUp: false,
   })
   S.current.phase = phase
   const video = useRef<HTMLVideoElement>(null)
@@ -220,6 +225,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     st.timers = []
     st.perf = { running: false, base: now(), at: 0 }
     video.current?.pause()
+    setCountLabel('')
   }, [now])
 
   useEffect(() => () => halt(), [halt])
@@ -260,6 +266,9 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     st.target = null
     st.heldSince = null
     st.lostSince = null
+    st.tryingFor = 0
+    st.gaveUp = false
+    setGiveUp(false)
     st.lastCount = -1
     seek(from)
     setPause(null)
@@ -277,8 +286,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     setPhase('countin')
     st.timers.push(window.setTimeout(() => {
       setCountLabel('')
-      // No mistakes are called in the first count and a half after (re)starting: find the groove.
-      st.detector?.reset(from + ((all.counts[1] - all.counts[0]) || 0.5) * 1.5)
+      // No mistakes are called in the first 2 counts after (re)starting: find the groove.
+      st.detector?.reset(from + ((all.counts[1] - all.counts[0]) || 0.5) * 2)
       play()
       setPhase('flowing')
     }, (lead + 4 * beat) * 1000))
@@ -344,6 +353,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     } else {
       st.stats.pauses++
       st.pausesAt.set(k, (st.pausesAt.get(k) ?? 0) + 1)
+      st.tryingFor = 0
+      st.gaveUp = false
       if (st.all) {
         st.target = { frame: st.all.frames[m.j], j: m.j, bone: m.bone }
         seek(m.j / st.all.fps) // the video shows the same moment as the frozen ghost
@@ -383,6 +394,13 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     return () => window.clearTimeout(id)
   }, [held, phase, redo, say])
 
+  useEffect(() => {
+    if (!giveUp || phase !== 'paused' || held) return
+    void say("Let's try it in motion instead. From count 1.")
+    const id = window.setTimeout(redo, 2200)
+    return () => window.clearTimeout(id)
+  }, [giveUp, phase, held, redo, say])
+
   const finishSection = useCallback((passed: boolean | null = null) => {
     const st = S.current
     halt()
@@ -400,7 +418,10 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const st = S.current
     const me = f.people.find((p) => p.id === f.dancerId)
     const cam = document.querySelector<HTMLVideoElement>('.posecam video')
-    const frame = me && cam ? normaliseFrame(me.body, cam.videoWidth, cam.videoHeight) : null
+    const full = me && cam ? normaliseFrame(me.body, cam.videoWidth, cam.videoHeight) : null
+    // Only judge a body that's properly in frame: most limbs visible (not a face close to the lens).
+    const limbsSeen = full ? BONES.slice(0, 8).filter(([a, b]) => full[a] && full[b]).length : 0
+    const frame = limbsSeen >= 6 ? full : null
 
     if (st.phase === 'paused' && st.target) {
       // "Now you try": hold the target pose for a moment.
@@ -408,6 +429,14 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
         st.heldSince ??= performance.now()
         if (performance.now() - st.heldSince > HOLD_S * 1000) setHeld(true)
       } else st.heldSince = null
+      // Can't get the still pose? After a while (and only if they're in view), try it in motion.
+      const nowMs = performance.now()
+      if (frame && st.lastTryAt) st.tryingFor += Math.min(0.2, (nowMs - st.lastTryAt) / 1000) // real seconds in view
+      st.lastTryAt = nowMs
+      if (st.tryingFor > GIVE_UP_S && !st.gaveUp) {
+        st.gaveUp = true
+        setGiveUp(true)
+      }
       return
     }
     if (st.phase !== 'flowing' || !st.all) return
@@ -552,6 +581,7 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
 
   const stop = () => {
     halt()
+    setNote(null)
     setPause(null)
     setPhase('ready')
   }
@@ -657,6 +687,8 @@ export default function Practice({ routine, stepIndex, step, onExit, onNextStep,
     const j = Math.min(st.all.frames.length - 1, Math.round(at * st.all.fps))
     st.target = { frame: st.all.frames[j], j, bone: -1 }
     st.heldSince = null
+    st.tryingFor = 0
+    st.gaveUp = false
     setHeld(false)
     seek(at)
     const name = seg.names[count - 1]
