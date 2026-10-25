@@ -80,6 +80,8 @@ export function makeSpeak(getToken: () => Promise<string | null>, persona: () =>
       })
     }
   }
+  /** Is the coach talking right now? (so hands-free listening ignores the coach's own voice) */
+  speak.busy = () => (!!playing && !playing.paused && !playing.ended) || !!window.speechSynthesis?.speaking
   speak.prefetch = (text: string) => {
     for (const l of chunks(text)) void clip(l).catch(() => null)
   }

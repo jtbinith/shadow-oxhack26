@@ -56,3 +56,15 @@ def test_publishable_key_decodes_to_frontend_api(monkeypatch):
     domain = base64.b64encode(b"example-app-123.clerk.accounts.dev$").decode().rstrip("=")
     monkeypatch.setattr(settings, "clerk_publishable_key", f"pk_test_{domain}")
     assert auth._frontend_api() == "example-app-123.clerk.accounts.dev"
+
+
+def test_coach_actions_are_validated():
+    from app.agent.coach import _actions
+    acts = _actions([
+        {"type": "speed", "value": "0.5"},
+        {"type": "demo", "value": "2:5"},
+        {"type": "redo", "value": ""},  # second movement action: dropped
+    ])
+    assert acts == [{"type": "speed", "speed": 0.5}, {"type": "demo", "eight_count": 2, "count": 5}]
+    assert _actions([{"type": "speed", "value": "3"}, {"type": "nuke", "value": ""}, {"type": "show_pose", "value": "9"}]) == []
+    assert _actions([{"type": "show_pose", "value": "4"}]) == [{"type": "show_pose", "count": 4}]

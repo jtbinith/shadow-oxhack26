@@ -186,6 +186,7 @@ class AskIn(BaseModel):
     question: str = Field(min_length=2, max_length=300)
     step_index: int = Field(ge=0, default=0)
     rep_context: dict | None = None
+    state: dict | None = None  # where the learner is in practice (phase, speed, 8-count, moves)
 
 
 @router.post("/ask")
@@ -196,11 +197,11 @@ def ask_coach(routine_id: str, body: AskIn, user_id: str = User) -> dict:
     with _pool().connection() as c:
         _owned(c, routine_id, user_id)
     try:
-        return coach.ask(routine_id, user_id, body.question, body.step_index, body.rep_context)
+        return coach.ask(routine_id, user_id, body.question, body.step_index, body.rep_context, body.state)
     except Exception:
         return {
-            "answer": "I couldn't reach my notes just now — but from your last rep, focus on the cue I gave you and try it slower.",
-            "drill": {"drill": "full", "speed": 0.5, "reason": "Slower rep while the coach reconnects"},
+            "answer": "I couldn't reach my notes just now, so let's take it slower and go again.",
+            "actions": [{"type": "speed", "speed": 0.5}, {"type": "redo"}],
         }
 
 
